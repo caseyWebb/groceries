@@ -4,7 +4,7 @@ tags: [smoke-test]
 protein: vegetarian
 cuisine: test
 style: none
-time_total: 1
+time_total: 2
 time_active: 1
 servings: 1
 difficulty: easy
