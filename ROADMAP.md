@@ -1,4 +1,4 @@
-# BUILD-SEQUENCE.md — OpenSpec Change Proposals
+# ROADMAP.md — OpenSpec Change Proposals
 
 A sequence of independently-buildable OpenSpec changes. Each change is sized to fit within OpenSpec's recommended 200-300 line spec cap and produces something concrete and testable. Dependencies are listed explicitly. You can build them in the suggested order, or fan out where dependencies allow parallel work.
 
@@ -16,16 +16,16 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 
 ## Change 01: Repo skeleton
 
-**Scope:** Initialize the repository structure exactly as specified in `PROJECT.md`. Create all directories, empty TOML files with header comments, README, gitignore, and commit CLAUDE.md + SCHEMAS.md + TOOLS.md at the root or under `docs/`.
+**Scope:** Initialize the repository structure exactly as specified in `docs/PROJECT.md`. Create all directories, empty TOML files with header comments, README, gitignore, and commit CLAUDE.md + docs/SCHEMAS.md + docs/TOOLS.md at the root or under `docs/`.
 
 **Dependencies:** None.
 
 **Deliverables:**
-- All directories from PROJECT.md's repo structure
-- Stub TOML files with header comments and example commented-out entries per SCHEMAS.md
+- All directories from docs/PROJECT.md's repo structure
+- Stub TOML files with header comments and example commented-out entries per docs/SCHEMAS.md
 - `README.md` explaining the project and how to use the repo
 - `.gitignore` (Node, OS, editor files, Worker secrets)
-- CLAUDE.md, SCHEMAS.md, TOOLS.md, PROJECT.md committed at the root or under `docs/`
+- CLAUDE.md, docs/SCHEMAS.md, docs/TOOLS.md, docs/PROJECT.md committed at the root or under `docs/`
 - Initial commit; push to GitHub private repo
 
 **Done when:** `git clone` produces the structure that everything else builds on. Obsidian (or similar) can open `recipes/` and show... nothing yet, but the structure is there.
@@ -53,7 +53,7 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 
 ## Change 03: Recipe corpus migration
 
-**Scope:** Import an initial 30-50 recipes from existing sources (ReciMe, personal notes, bookmarked URLs) into `recipes/*.md` with proper frontmatter per SCHEMAS.md. This is partly manual data work; the implementation aspect is small.
+**Scope:** Import an initial 30-50 recipes from existing sources (ReciMe, personal notes, bookmarked URLs) into `recipes/*.md` with proper frontmatter per docs/SCHEMAS.md. This is partly manual data work; the implementation aspect is small.
 
 **Dependencies:** Changes 01 and 02 (validation needs to pass).
 
@@ -71,7 +71,7 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 
 ## Change 04: Worker skeleton + read-only data tools
 
-**Scope:** Bootstrap a Cloudflare Worker in `worker/` with TypeScript, the MCP SDK, and the basic plumbing. Implement the **read-only** tools from TOOLS.md: `list_recipes`, `read_recipe`, `read_pantry`, `read_preferences`, `read_taste`, `read_diet_principles`, `ready_to_eat_available`. Set up GitHub API client. Deploy via Wrangler. Test via MCP Inspector.
+**Scope:** Bootstrap a Cloudflare Worker in `worker/` with TypeScript, the MCP SDK, and the basic plumbing. Implement the **read-only** tools from docs/TOOLS.md: `list_recipes`, `read_recipe`, `read_pantry`, `read_preferences`, `read_taste`, `read_diet_principles`, `ready_to_eat_available`. Set up GitHub API client. Deploy via Wrangler. Test via MCP Inspector.
 
 **Dependencies:** Change 01 (structure), Change 03 (some recipes to read). Change 02 not strictly required but helpful (`_indexes/recipes.json` enables `list_recipes`).
 
@@ -79,7 +79,7 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 - `worker/` directory with full TypeScript Worker source
 - `worker/wrangler.toml` and deployment config
 - GitHub API client wrapper (handles auth, rate limiting, basic retries)
-- All read tools per TOOLS.md, returning structured JSON
+- All read tools per docs/TOOLS.md, returning structured JSON
 - Wrangler-deployed Worker at `grocery-mcp.<your-subdomain>.workers.dev`
 - README in `worker/` explaining local dev and deploy
 
@@ -96,8 +96,8 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 **Deliverables:**
 - Kroger Developer credentials configured as Worker secrets
 - OAuth flow handler (probably a small auth route in the Worker for the initial token exchange; refresh handled automatically)
-- All Kroger tools per TOOLS.md
-- The 7-step matching pipeline as specified in PROJECT.md
+- All Kroger tools per docs/TOOLS.md
+- The 7-step matching pipeline as specified in docs/PROJECT.md
 - SKU cache writes via GitHub API
 - Tests for the matching pipeline (canonicalization, cache, narrowing, tiebreaker, LLM-fallback signal)
 
@@ -107,12 +107,12 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 
 ## Change 06: Write tools + atomic commit
 
-**Scope:** Implement the **write** tools from TOOLS.md: `update_recipe`, `update_pantry`, `mark_pantry_verified`, `add_draft_ready_to_eat`, `update_ready_to_eat`, the user-curated `update_*` tools, and the headline `write_cart_and_commit` + `commit_changes`. Implement atomic batched commits via GitHub's Git Data API (build a tree, create commit, update ref) instead of sequential file commits.
+**Scope:** Implement the **write** tools from docs/TOOLS.md: `update_recipe`, `update_pantry`, `mark_pantry_verified`, `add_draft_ready_to_eat`, `update_ready_to_eat`, the user-curated `update_*` tools, and the headline `write_cart_and_commit` + `commit_changes`. Implement atomic batched commits via GitHub's Git Data API (build a tree, create commit, update ref) instead of sequential file commits.
 
 **Dependencies:** Changes 04 and 05.
 
 **Deliverables:**
-- Write tools per TOOLS.md
+- Write tools per docs/TOOLS.md
 - Atomic batched commit implementation
 - Cart-write integration with Kroger (cart_add subroutine inside `write_cart_and_commit`)
 - Validation that updates pass schema checks before commit
@@ -148,7 +148,7 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 **Dependencies:** Change 07.
 
 **Deliverables:**
-- Tools per TOOLS.md
+- Tools per docs/TOOLS.md
 - Updated CLAUDE.md with menu-request orchestration
 - Pantry confirmation pass surfacing have_fresh, have_stale, inventory_substitutes, not_in_pantry
 - Sequencing pass via `uses_components` / `produces_components` references
@@ -181,7 +181,7 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 
 **Deliverables:**
 - `feeds.toml` populated with 5-8 RSS feeds
-- Discovery tools per TOOLS.md
+- Discovery tools per docs/TOOLS.md
 - JSON-LD recipe import pipeline
 - Draft-state behavior in CLAUDE.md
 - Conversational test of disposition: "rate the Serious Eats one 4 stars", "remove that one"

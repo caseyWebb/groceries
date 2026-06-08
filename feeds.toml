@@ -1,0 +1,25 @@
+# feeds.toml — RSS feeds for recipe discovery
+#
+# User-curated. RSS feed URLs and tags, read by fetch_rss_discoveries and scored
+# against the taste profile. weight biases how heavily a feed's items rank.
+# See docs/SCHEMAS.md for the full schema.
+#
+# Example feeds (uncomment and edit; aim for 5–8 to start):
+#
+# [[feeds]]
+# url = "https://www.seriouseats.com/recipes/atom.xml"
+# name = "Serious Eats"
+# tags = ["trusted", "technique-focused"]
+# weight = 1.0
+#
+# [[feeds]]
+# url = "https://www.budgetbytes.com/feed/"
+# name = "Budget Bytes"
+# tags = ["weeknight", "approachable"]
+# weight = 0.8
+#
+# [[feeds]]
+# url = "https://www.bonappetit.com/feed/rss"
+# name = "Bon Appétit"
+# tags = ["aspirational", "trend-aware"]
+# weight = 0.7
