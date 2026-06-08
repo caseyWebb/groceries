@@ -1,1 +1,12 @@
-{}
+{
+  "fresh-pasta": {
+    "produced_by": [
+      "fresh-pasta"
+    ],
+    "used_by": [
+      "lasagna-bolognese",
+      "meat-lasagna",
+      "uovo-in-raviolo"
+    ]
+  }
+}

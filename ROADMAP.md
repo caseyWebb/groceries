@@ -222,6 +222,25 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 
 ---
 
+## Change 13: Component vocabulary registry
+
+**Scope:** Introduce a canonical component vocabulary so `uses_components` / `produces_components` slugs stay consistent across recipes and over time. `suggest_sequencing` (Change 08) matches these by exact slug, so drift (`fresh-pasta` in one recipe, `pasta-dough` in another) silently breaks sequencing links. Add a source-of-truth registry file, document it in `docs/SCHEMAS.md`, extend validation to flag component references not in the registry, and update CLAUDE.md so the agent consults the registry when wiring components (and may extend it when a genuinely new component appears). **This modifies the `data-validation` capability** (new soft/hard rule for unknown component references).
+
+**Dependencies:** A recipe corpus that actually declares components (the ReciMe import / `import-recime-corpus` change). Best **seeded by** that import's reconciliation pass rather than designed in the abstract — let the corpus reveal which components recur (realistically a small set, e.g. `fresh-pasta` feeding `lasagna-bolognese` / `uovo-in-raviolo`) before codifying the vocabulary. Consumed by Change 08 (`suggest_sequencing`).
+
+**Deliverables:**
+- A registry file (e.g. `components.toml`) listing canonical component slugs with descriptions
+- `docs/SCHEMAS.md` entry for the registry
+- Validation rule in `scripts/build-indexes.mjs`: warn (or fail) when a recipe references a component absent from the registry
+- CLAUDE.md guidance: consult the registry when setting `uses_components` / `produces_components`; extend it deliberately, don't coin variants
+- Existing corpus reconciled to the canonical vocabulary
+
+**Done when:** Two recipes that should sequence together reliably share the same component slug, and a typo'd or off-vocabulary component reference is caught at build time instead of silently failing to link.
+
+**Notes:** Low urgency — only earns its keep once recipes are actually sharing components. Worth capturing now because the `import-recime-corpus` reconcile pass is the natural place to harvest the initial vocabulary.
+
+---
+
 ## Suggested ordering and parallelization
 
 ```
