@@ -21,12 +21,16 @@ The complete tool surface exposed by `grocery-mcp` to Claude. Each tool encodes 
 List recipes matching filters. Reads from `_indexes/recipes.json` (single API call).
 
 **Params:**
-- `filters` (object, optional): `{ status?, protein?, cuisine?, tags?, season?, dietary?, max_time_total?, not_cooked_since?, exclude_recently_cooked? }`
+- `filters` (object, optional): `{ status?, protein?, cuisine?, tags?, season?, dietary?, max_time_total?, not_cooked_since?, exclude_cooked_within_days? }`
 
 **Returns:**
 - `{ recipes: [{ slug, title, frontmatter }] }` — array of matched recipes with frontmatter
 
-**Notes:** Default `status: active`. Use `status: draft` to see discoveries awaiting disposition.
+**Notes:**
+- Default `status: active`. Use `status: draft` to see discoveries awaiting disposition, or `status: "all"` to opt out of status filtering entirely.
+- Array filters (`tags`, `dietary`, `season`) match **all** listed values (AND/narrowing).
+- `exclude_cooked_within_days` (number): drop recipes cooked within the last N days. Caller-supplied window, not a stored default.
+- `not_cooked_since` (date): recipes with `last_cooked: null` (never cooked) **pass** this filter.
 
 ### `read_recipe(slug)`
 
@@ -36,7 +40,7 @@ Read a single recipe's full content (frontmatter + body).
 - `slug` (string, required)
 
 **Returns:**
-- `{ slug, frontmatter, body, last_modified }`
+- `{ slug, frontmatter, body }`
 
 ### `update_recipe(slug, updates)`
 
@@ -76,6 +80,8 @@ Read pantry items, optionally filtered.
 
 **Returns:**
 - `{ items: [...] }` — array of pantry items per schema
+
+**Notes:** `category` and `prepared_only` are deterministic from pantry data. `stale_only` depends on shelf-life thresholds from `ingredients.toml`, which doesn't exist until Change 12 — until then it returns a structured `{ error: "unsupported" }` rather than guessing.
 
 ### `verify_pantry_for_recipe(slug)`
 

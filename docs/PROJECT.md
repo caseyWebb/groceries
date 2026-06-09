@@ -522,10 +522,11 @@ A personal automation experiment with realistic odds of either becoming load-bea
 
 ## Security posture
 
-- Single user; no auth surface for me to maintain on the Worker beyond the MCP connection.
-- Kroger OAuth tokens stored as Worker secrets (encrypted at rest, never logged).
-- The Worker URL is technically public but only accepts MCP traffic from authenticated Claude sessions. No data exposure even if the URL leaks.
-- All data in a private GitHub repo. Repo access is the security boundary.
+- **The repo is public** (decided during Change 04 exploration). The data is low-sensitivity personal info (recipes, pantry, taste, preferences), and a public repo collapses the auth story: an authless read-only Worker leaks nothing that isn't already public, so the security boundary moves cleanly to the *write* + Kroger path. Accepted cost: eating habits, grocery cadence, and `preferences.toml`'s `preferred_location` (≈ rough geography) are public.
+- **Secrets never touch the repo.** Because it's public, this discipline is load-bearing: the GitHub token and Kroger OAuth tokens live as Worker secrets only (encrypted at rest, never logged, covered by `.gitignore`).
+- Single user; no auth surface to maintain on the Worker beyond the MCP connection.
+- **Worker auth is staged:** authless through Change 04 (tested via MCP Inspector); OAuth added at Change 07, where it becomes mandatory because Claude.ai's custom-connector UI requires it (no "no auth" / bearer-token option). Post-public-repo, that OAuth protects the *write/cart* surface, not read data.
+- The Worker reads the repo via an authenticated GitHub client (5,000 req/hr) — a token is needed for writes regardless of visibility, so reads reuse it.
 - Cart writes are write-only via Kroger API. The agent literally cannot read my cart or check out for me — useful safety property.
 - No home network exposure. The Mac Mini is unused for this; passive consumer of the data via Obsidian if I want it.
 

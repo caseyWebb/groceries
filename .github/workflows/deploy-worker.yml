@@ -1,0 +1,41 @@
+name: Deploy Worker
+
+# CD for the grocery-mcp Worker. Deploys on push to worker/**.
+# The Cloudflare API token lives in GitHub Actions secrets (CLOUDFLARE_API_TOKEN).
+# The Worker's own secrets (GITHUB_TOKEN, later Kroger tokens) are NOT here —
+# they are set once via `wrangler secret put` and persist across deploys.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "worker/**"
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install worker dependencies
+        working-directory: worker
+        run: npm ci
+
+      - name: Typecheck
+        working-directory: worker
+        run: npm run typecheck
+
+      - name: Test
+        working-directory: worker
+        run: npm test
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: worker

@@ -69,34 +69,71 @@ Each entry below contains enough description for the OpenSpec proposal skill to 
 
 ---
 
-## Change 04: Worker skeleton + read-only data tools
+## Change 04: Worker skeleton + repo-data read tools
 
-**Scope:** Bootstrap a Cloudflare Worker in `worker/` with TypeScript, the MCP SDK, and the basic plumbing. Implement the **read-only** tools from docs/TOOLS.md: `list_recipes`, `read_recipe`, `read_pantry`, `read_preferences`, `read_taste`, `read_diet_principles`, `ready_to_eat_available`. Set up GitHub API client. Deploy via Wrangler. Test via MCP Inspector.
+**Scope:** Bootstrap a Cloudflare Worker in `worker/` with TypeScript, the MCP SDK, and the basic plumbing. Implement the **repo-data-backed read tools** from docs/TOOLS.md: `list_recipes`, `read_recipe`, `read_pantry`, `read_preferences`, `read_taste`, `read_diet_principles`. These read only from the GitHub repo (indexes + flat files) — no external services. Set up GitHub API client. Deploy via Wrangler. Test via MCP Inspector.
+
+**Tool/Kroger split (decided):** This change is the **repo-data** half of the tool surface. Anything that touches Kroger lives in the external-services bucket (Change 05). `ready_to_eat_available` — whose defining behavior is the Kroger availability cross-reference — therefore moves to **Change 05**, not here. The catalogs are empty until Change 05/10 populate them anyway, so nothing is lost by deferring. Result: Change 04 is exactly six pure repo-data reads.
+
+**Transport (decided):** Use `createMcpHandler()` (stateless, **no Durable Objects**) over **Streamable HTTP** (SSE is deprecated). The six read tools are pure functions of repo state — no per-session memory — so the heavier `McpAgent` + Durable Objects path isn't needed.
+
+**Auth posture (decided).** Three separate auth legs — keep them distinct:
+- *Leg 1 — Worker → GitHub:* a fine-grained **PAT** scoped to this repo, set via `wrangler secret put GITHUB_TOKEN`. Server-side secret; Claude.ai never sees it. Scope it `contents:read+write` once so Change 06 reuses it.
+- *Leg 2 — Claude.ai → Worker:* deploy **authless for Change 04** (read-only on public data leaks nothing; test via MCP Inspector). Securing this leg lands via **Cloudflare Access** in front of the Worker (policy: only Casey's identity), and **must be in place by Change 06** — the moment write/cart tools exist, an authless public URL lets anyone write the repo and add to the cart. Change 07 then just points Claude.ai at the already-secured Worker; it is *not* the first place auth appears.
+- *Leg 3 — Worker → Kroger:* Change 05, separate OAuth, Worker secrets.
+
+**GitHub access (decided — Option B):** Build the authenticated GitHub client wrapper **now** (not tokenless), reused by Changes 05/06. Authenticated reads get 5,000 req/hr vs. 60/hr unauthenticated; writes (Change 06) need the token regardless of repo visibility, so reads piggyback on it. `list_recipes` reads `_indexes/recipes.json` (one call, filter in-worker); the rest read flat files at `main` HEAD. No KV cache in v1 — add only if latency is felt.
+
+**CI/CD (decided — CD from day 1):** Ship `.github/workflows/deploy-worker.yml` that deploys on push to `worker/**`. First deploy is manual (`wrangler deploy`, to create the Worker and run `wrangler secret put` for the PAT); CD owns every deploy after. The **Cloudflare API token** lives in GitHub Actions secrets; the **Worker's own secrets** (PAT, later Kroger tokens) are set via `wrangler secret put` straight to Cloudflare and persist across deploys — they are NOT in the repo or in Actions.
+
+**`list_recipes` semantics (decided):**
+- Array filters (`tags`, `dietary`, `season`) match **ALL** listed values (AND / narrowing). Trivial to widen later if it annoys.
+- `exclude_recently_cooked` is a **tool param** — `exclude_cooked_within_days` (number) — not a hardcoded window or a preferences lookup. Caller decides.
+- Requesting every status is **explicit**: `status: "all"`. Default remains `active`.
+- `not_cooked_since` **passes** recipes with `last_cooked: null` (never cooked ⊃ not-cooked-since-X, i.e. infinity).
+
+**Errors (decided):** Tools return **structured** errors the agent can reason over, never raw throws/500s. Enumerate explicit cases with helpful messages: unknown recipe slug, missing/malformed `_indexes/recipes.json`, GitHub unreachable or rate-limited, malformed TOML/frontmatter. Shape e.g. `{ error: "not_found", slug, message }`. This convention is set here and inherited by every later tool.
+
+**`read_recipe` shape (decided):** Drop `last_modified` from the return — it would cost an extra Commits-API call per read and nothing currently consumes it. Return `{ slug, frontmatter, body }` (blob `sha` available cheaply if a need appears). Revisit if a consumer materializes.
+
+**Parsing on `workerd` (decided — minimal deps):** Do **not** use `gray-matter` in the Worker (Node `Buffer` assumptions). Split frontmatter on `---` by hand and parse the YAML with `js-yaml` (pure JS, runs on `workerd`); TOML via `smol-toml` (already a dep). Rewriting the small amount of parsing glue is acceptable to keep the dependency surface thin.
+
+**`read_pantry` filter (decided):** Ship `category` and `prepared_only` (both deterministic from pantry data). `stale_only` depends on shelf-life thresholds from `ingredients.toml` (Change 12) and can't be computed deterministically yet — until then it returns a structured `{ error: "unsupported" }` rather than guessing. Same deferral shape as `ready_to_eat_available`.
+
+**Local dev + secrets hygiene (decided):** `wrangler dev` locally, MCP Inspector pointed at the local URL; the PAT lives in `.dev.vars` for local runs. Anything gitignored-but-needed-to-run gets documented in `worker/README.md` as it's added (the repo is public — no secret silently required). Confirm `.gitignore` covers `.dev.vars` and `.wrangler/`.
+
+**TOOLS.md is the contract — keep it in sync.** When a tool's params/returns change during a proposal or build, update `docs/TOOLS.md` in the same pass. No drift. (Already reconciled for the `list_recipes` filter rename, the `read_recipe` `last_modified` drop, and the `read_pantry` `stale_only` deferral.)
 
 **Dependencies:** Change 01 (structure), Change 03 (some recipes to read). Change 02 not strictly required but helpful (`_indexes/recipes.json` enables `list_recipes`).
 
 **Deliverables:**
-- `worker/` directory with full TypeScript Worker source
-- `worker/wrangler.toml` and deployment config
-- GitHub API client wrapper (handles auth, rate limiting, basic retries)
-- All read tools per docs/TOOLS.md, returning structured JSON
-- Wrangler-deployed Worker at `grocery-mcp.<your-subdomain>.workers.dev`
-- README in `worker/` explaining local dev and deploy
+- `worker/` directory with full TypeScript Worker source (own `package.json`/`tsconfig`, separate dep tree from the root index-build tooling)
+- `worker/wrangler.toml` (or `wrangler.jsonc`) and deployment config
+- Authenticated GitHub client wrapper (PAT via Worker secret; handles rate limiting, basic retries, structured errors)
+- The six repo-data read tools per docs/TOOLS.md, returning structured JSON
+- `list_recipes` filter logic over the index per the semantics above (AND on arrays, `status: "all"` opt-out, `exclude_cooked_within_days` param, null-`last_cooked` passes `not_cooked_since`)
+- `js-yaml` + manual frontmatter split for recipe parsing; `smol-toml` for TOML — no `gray-matter` in the Worker
+- Explicit structured error cases with helpful messages (unknown slug, missing/bad index, GitHub down/rate-limited, malformed data)
+- `.github/workflows/deploy-worker.yml` — CD on push to `worker/**` (Cloudflare API token in Actions secrets)
+- First manual `wrangler deploy` + `wrangler secret put GITHUB_TOKEN`; Worker live at `grocery-mcp.<your-subdomain>.workers.dev`
+- README in `worker/` explaining local dev, the one-time manual deploy/secret setup, and how CD takes over
 
-**Done when:** You can invoke `list_recipes({ status: "active" })` from MCP Inspector and see your migrated recipes returned as JSON.
+**Done when:** You can invoke `list_recipes({ status: "active" })` from MCP Inspector and see your migrated recipes returned as JSON, and a push to `worker/**` redeploys via CD.
 
 ---
 
 ## Change 05: Kroger API integration + matching pipeline
 
-**Scope:** Implement the Kroger-facing tools inside the Worker: `kroger_flyer`, `kroger_prices`, `kroger_search` (internal helper), and the headline `match_ingredient_to_kroger_sku` with its full 7-step deterministic pipeline. Sign up for the Kroger Developer account, complete OAuth (auth code flow), store tokens as Worker secrets. Append new SKU mappings to `skus/kroger.toml` via the GitHub API.
+**Scope:** Implement the Kroger-facing (external-service) tools inside the Worker: `kroger_flyer`, `kroger_prices`, `kroger_search` (internal helper), `ready_to_eat_available` (catalog read **+** Kroger availability cross-reference — moved here from Change 04 because its defining behavior needs Kroger), and the headline `match_ingredient_to_kroger_sku` with its full 7-step deterministic pipeline. Sign up for the Kroger Developer account, complete OAuth (auth code flow), store tokens as Worker secrets. Append new SKU mappings to `skus/kroger.toml` via the GitHub API.
+
+**This is the "external services" half of the tool surface** — the counterpart to Change 04's repo-data reads. It introduces the first real secrets (Kroger OAuth tokens, kept as Worker secrets, never committed — matters more now that the repo is public).
 
 **Dependencies:** Change 04.
 
 **Deliverables:**
 - Kroger Developer credentials configured as Worker secrets
 - OAuth flow handler (probably a small auth route in the Worker for the initial token exchange; refresh handled automatically)
-- All Kroger tools per docs/TOOLS.md
+- All Kroger tools per docs/TOOLS.md, including `ready_to_eat_available`
 - The 7-step matching pipeline as specified in docs/PROJECT.md
 - SKU cache writes via GitHub API
 - Tests for the matching pipeline (canonicalization, cache, narrowing, tiebreaker, LLM-fallback signal)

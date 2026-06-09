@@ -1,0 +1,21 @@
+{
+  // grocery-mcp — custom MCP server for the grocery agent.
+  // Stateless (createMcpHandler over Streamable HTTP): no Durable Objects, no KV.
+  // Secrets are NOT in this file. Set them out-of-band and they persist across deploys:
+  //   wrangler secret put GITHUB_TOKEN
+  // Non-secret config (public repo coordinates) lives in vars below.
+  "name": "grocery-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-06-01",
+  // Required by the `agents` SDK internals (mimetext / node:diagnostics_channel).
+  // Our own parsing (js-yaml + smol-toml) is workerd-safe and does not depend on it.
+  "compatibility_flags": ["nodejs_compat"],
+  "vars": {
+    "GITHUB_OWNER": "caseyWebb",
+    "GITHUB_REPO": "groceries",
+    "GITHUB_REF": "main"
+  },
+  "observability": {
+    "enabled": true
+  }
+}
