@@ -50,3 +50,60 @@ sku = "0007283090632"
 brand = "Tillamook"
 size = "4 sticks / 16 oz"
 
+[[mappings]]
+ingredient = "bone-in chicken thighs"
+sku = "0028334750000"
+brand = "Heritage Farm"
+size = "1 lb"
+
+[[mappings]]
+ingredient = "tomatillos"
+sku = "0000000004801"
+size = "1 lb"
+
+[[mappings]]
+ingredient = "cilantro"
+sku = "0000000004889"
+size = "1 ct"
+
+[[mappings]]
+ingredient = "corn tortillas"
+sku = "0007373106300"
+brand = "Mission"
+size = "30 count"
+
+[[mappings]]
+ingredient = "fresh ginger"
+sku = "0000000004612"
+size = "1 ct"
+
+[[mappings]]
+ingredient = "ground pork"
+sku = "0001111097275"
+brand = "Kroger"
+size = "16 oz"
+
+[[mappings]]
+ingredient = "heavy cream"
+sku = "0001111050312"
+brand = "Kroger"
+size = "1 qt"
+
+[[mappings]]
+ingredient = "nutmeg"
+sku = "0001111001055"
+brand = "Kroger"
+size = "1.85 oz"
+
+[[mappings]]
+ingredient = "pecorino romano"
+sku = "0001111050195"
+brand = "Kroger"
+size = "6 oz"
+
+[[mappings]]
+ingredient = "parmesan"
+sku = "0001111050195"
+brand = "Kroger"
+size = "6 oz"
+
