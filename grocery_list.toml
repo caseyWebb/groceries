@@ -39,15 +39,6 @@
 # added_at = "2026-06-09"
 
 [[items]]
-name = "paper towels"
-quantity = "1"
-kind = "household"
-status = "in_cart"
-source = "ad_hoc"
-for_recipes = []
-added_at = "2026-06-09"
-
-[[items]]
 name = "butter"
 quantity = "1"
 kind = "grocery"
