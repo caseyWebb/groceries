@@ -11,15 +11,22 @@ time_total: 40
 time_active: 15
 servings: 6
 difficulty: easy
-dietary: [gluten-free, dairy-free]
+dietary:
+  - gluten-free
+  - dairy-free
 season: []
 veg_forward: false
 last_cooked: null
-rating: null
+rating: 5
 status: active
 discovered_at: null
 discovery_source: null
-ingredients_key: [chicken thighs, tomatillos, poblano peppers, white onion, cilantro]
+ingredients_key:
+  - chicken thighs
+  - tomatillos
+  - poblano peppers
+  - white onion
+  - cilantro
 meal_preppable: true
 uses_components: []
 produces_components: []
