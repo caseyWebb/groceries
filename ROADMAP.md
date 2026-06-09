@@ -299,6 +299,8 @@ The bucket name `have_fresh` goes away too (it asserts a freshness the tool isn'
 
 **Scope:** Wire the full menu-request flow: pre-pass gathering of `kroger_flyer`, `kroger_prices`, `ready_to_eat_available`, `read_preferences`, `read_taste`. Update CLAUDE.md so Claude assembles all context and reasons about menus including freeform constraints ("comfort food one night"), meal-prep callouts, sale-based substitutions, ready-to-eat opportunity buys.
 
+**Recipe-discovery thoroughness (observed 2026-06-09, Change 08 smoke test):** `list_recipes` has **no free-text search** — it filters by status/protein/tags only, so matching a user's named dish ("let's make chicken and rice") to the corpus is pure LLM judgment over the filtered list. In smoke testing, a recipe-seeded request listed the 15 active chicken recipes but surfaced only two ethnic-named chicken-rice dishes (Arroz Caldo, Galinhada Mineira), **under-counted** ("you've got two") and silently skipped the recipe literally titled "Chicken and Rice." The data and tools were correct; the gap is the selection/framing step. CLAUDE.md guidance here should make the agent scan titles/tags exhaustively when the user names a dish (don't vibe-match a couple), and either disambiguate among all genuine matches or confirm which one before walking the pantry. Consider whether a lightweight title/text match belongs in `list_recipes` or stays an LLM responsibility.
+
 **Dependencies:** Change 08.
 
 **Deliverables:**
