@@ -38,5 +38,12 @@
 # for_recipes = []
 # added_at = "2026-06-09"
 
-items = []
+[[items]]
+name = "bone-in chicken thighs"
+quantity = "3 lbs"
+kind = "grocery"
+status = "active"
+source = "menu"
+for_recipes = [ "chicken-chile-verde", "arroz-caldo" ]
+added_at = "2026-06-09"
 
