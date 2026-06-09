@@ -41,7 +41,7 @@
 
 - [x] 7.1 First manual deploy: `wrangler deploy` (→ https://grocery-mcp.caseywebb.workers.dev), then `wrangler secret put GITHUB_TOKEN`
 - [x] 7.2 Add `.github/workflows/deploy-worker.yml` triggering on push to `worker/**`, deploying with `CLOUDFLARE_API_TOKEN`
-- [ ] 7.3 Verify a push to `worker/**` redeploys via CD (fires on first commit+push; user deferred committing)
+- [x] 7.3 Verify a push to `worker/**` redeploys via CD (run 27186569653: ci → typecheck → test → deploy, all green; worker live after redeploy)
 - [x] 7.4 Confirm `.gitignore` covers `.dev.vars` and `.wrangler/`; document any gitignored-but-needed dev files in `worker/README.md`
 
 ## 8. Smoke test + docs
