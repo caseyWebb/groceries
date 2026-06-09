@@ -32,3 +32,15 @@ sku = "0001111040601"
 brand = "Kroger"
 size = "1/2 gal"
 
+[[mappings]]
+ingredient = "paper towels"
+sku = "0003600049413"
+brand = "Viva"
+size = "6 ct"
+
+[[mappings]]
+ingredient = "butter"
+sku = "0007283008143"
+brand = "Tillamook"
+size = "48 oz"
+
