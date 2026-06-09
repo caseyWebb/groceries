@@ -42,5 +42,5 @@
 
 ## 8. Deploy + verify
 
-- [ ] 8.1 `wrangler dev` + MCP Inspector: `verify_pantry_for_recipe` on a real recipe returns the bucketed shape with age metadata; `propose_substitutions` returns empty against the unseeded `substitutions.toml`
-- [ ] 8.2 Confirm CD deploy on push to `worker/**`; smoke `verify_pantry_for_candidates` against a small candidate set
+- [x] 8.1 Live-verified from Claude.ai: `verify_pantry_for_recipe` returns the bucketed shape with age metadata; `propose_substitutions` returns empty against the unseeded `substitutions.toml`
+- [x] 8.2 CD deployed green on push to `main` (run 27239168005); `verify_pantry_for_candidates` smoke-confirmed live
