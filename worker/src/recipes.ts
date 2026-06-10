@@ -6,7 +6,6 @@ export interface RecipeFilters {
   protein?: string;
   cuisine?: string;
   query?: string;
-  tags?: string[];
   season?: string[];
   dietary?: string[];
   max_time_total?: number;
@@ -35,13 +34,39 @@ function isoDay(d: Date): string {
 
 /**
  * Apply filter semantics:
- * - array filters (tags/season/dietary) match ALL listed values (AND)
+ * - array filters (season/dietary) match ALL listed values (AND); no tags filter
  * - status defaults to "active"; status "all" disables status filtering
  * - not_cooked_since admits recipes with null last_cooked (never cooked)
  * - exclude_cooked_within_days drops recipes cooked within N days of `now`
- * - query matches when EVERY whitespace-separated token is a case-insensitive
- *   substring of the title or any tag (token-AND; deterministic membership, no ranking)
+ * - query is the single title+tags text search: tokenize on whitespace, drop
+ *   stopwords (connectives), then match when EVERY remaining token is a
+ *   case-insensitive substring of the title or any tag (token-AND; deterministic
+ *   membership, no ranking). An all-stopword query applies no text narrowing.
  */
+
+/** Connectives dropped from a query so "chicken and rice" ≡ "chicken rice". */
+const QUERY_STOPWORDS = new Set([
+  "and",
+  "or",
+  "with",
+  "the",
+  "a",
+  "an",
+  "of",
+  "in",
+  "on",
+  "for",
+  "&",
+]);
+
+/** Tokenize a query: lowercase, split on whitespace, drop empties and stopwords. */
+export function queryTokens(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 0 && !QUERY_STOPWORDS.has(t));
+}
+
 export function filterRecipes(
   index: RecipeIndex,
   filters: RecipeFilters = {},
@@ -49,10 +74,7 @@ export function filterRecipes(
 ): RecipeListItem[] {
   const wantStatus = filters.status === "all" ? null : (filters.status ?? "active");
 
-  const queryTokens = (filters.query ?? "")
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(Boolean);
+  const qTokens = queryTokens(filters.query ?? "");
 
   let cutoffWithin: string | null = null;
   if (typeof filters.exclude_cooked_within_days === "number") {
@@ -68,10 +90,6 @@ export function filterRecipes(
     if (filters.protein !== undefined && recipe.protein !== filters.protein) continue;
     if (filters.cuisine !== undefined && recipe.cuisine !== filters.cuisine) continue;
 
-    if (filters.tags?.length) {
-      const tags = asArray(recipe.tags);
-      if (!filters.tags.every((t) => tags.includes(t))) continue;
-    }
     if (filters.season?.length) {
       const season = asArray(recipe.season);
       if (!filters.season.every((s) => season.includes(s))) continue;
@@ -81,11 +99,11 @@ export function filterRecipes(
       if (!filters.dietary.every((d) => dietary.includes(d))) continue;
     }
 
-    if (queryTokens.length) {
+    if (qTokens.length) {
       const title = typeof recipe.title === "string" ? recipe.title.toLowerCase() : "";
       const tags = asArray(recipe.tags).map((t) => String(t).toLowerCase());
       const haystack = `${title} ${tags.join(" ")}`;
-      if (!queryTokens.every((tok) => haystack.includes(tok))) continue;
+      if (!qTokens.every((tok) => haystack.includes(tok))) continue;
     }
 
     if (typeof filters.max_time_total === "number") {

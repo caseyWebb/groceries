@@ -55,14 +55,21 @@ describe("filterRecipes", () => {
     expect(out).toEqual(["draft1"]);
   });
 
-  it("array filters match ALL listed values (AND)", () => {
-    expect(filterRecipes(index, { tags: ["weeknight", "beef"] }, NOW).map((r) => r.slug)).toEqual([
+  it("array filters (dietary/season) match ALL listed values (AND)", () => {
+    // active1: dietary ["dairy-free"], season ["fall"]
+    expect(filterRecipes(index, { dietary: ["dairy-free"] }, NOW).map((r) => r.slug)).toEqual([
       "active1",
     ]);
-    expect(filterRecipes(index, { tags: ["weeknight"] }, NOW).map((r) => r.slug).sort()).toEqual([
-      "active1",
-      "active2",
-    ]);
+    // requires BOTH values → active1 has only "dairy-free" → excluded
+    expect(filterRecipes(index, { dietary: ["dairy-free", "gluten-free"] }, NOW).map((r) => r.slug)).toEqual([]);
+    expect(filterRecipes(index, { season: ["fall"] }, NOW).map((r) => r.slug)).toEqual(["active1"]);
+  });
+
+  it("tags is no longer a filter — passing it is ignored", () => {
+    // active1 has tag "beef"; with no tags filter the result is just the active default.
+    const withTags = filterRecipes(index, { tags: ["beef"] } as never, NOW).map((r) => r.slug).sort();
+    const without = filterRecipes(index, {}, NOW).map((r) => r.slug).sort();
+    expect(withTags).toEqual(without);
   });
 
   it("filters by scalar fields and max_time_total", () => {
@@ -166,5 +173,25 @@ describe("filterRecipes query", () => {
     const emptyQuery = filterRecipes(queryIndex, { query: "   " }, NOW).map((r) => r.slug).sort();
     expect(emptyQuery).toEqual(without);
     expect(without).toEqual(["arroz-caldo", "chicken-and-rice", "lemon-chicken"]);
+  });
+
+  it("drops connective stopwords so the natural phrase matches", () => {
+    // "and" is a stopword → {chicken, rice}. Without stripping, arroz-caldo (no
+    // "and" anywhere) would be wrongly excluded while only the title with "and"
+    // survived. With stripping, both the title-match and the tag-match return.
+    const out = filterRecipes(queryIndex, { query: "chicken and rice" }, NOW).map((r) => r.slug).sort();
+    expect(out).toEqual(["arroz-caldo", "chicken-and-rice"]);
+  });
+
+  it("finds a title-only keyword (tag absent)", () => {
+    // chicken-and-rice is titled "Chicken and Rice" but has no "rice" tag.
+    const out = filterRecipes(queryIndex, { query: "rice" }, NOW).map((r) => r.slug);
+    expect(out).toContain("chicken-and-rice");
+  });
+
+  it("an all-stopword query applies no text narrowing", () => {
+    const out = filterRecipes(queryIndex, { query: "and the" }, NOW).map((r) => r.slug).sort();
+    const without = filterRecipes(queryIndex, {}, NOW).map((r) => r.slug).sort();
+    expect(out).toEqual(without);
   });
 });

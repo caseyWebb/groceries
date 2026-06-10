@@ -21,15 +21,15 @@ The complete tool surface exposed by `grocery-mcp` to Claude. Each tool encodes 
 List recipes matching filters. Reads from `_indexes/recipes.json` (single API call).
 
 **Params:**
-- `filters` (object, optional): `{ status?, protein?, cuisine?, query?, tags?, season?, dietary?, max_time_total?, not_cooked_since?, exclude_cooked_within_days? }`
+- `filters` (object, optional): `{ status?, protein?, cuisine?, query?, season?, dietary?, max_time_total?, not_cooked_since?, exclude_cooked_within_days? }`
 
 **Returns:**
 - `{ recipes: [{ slug, title, frontmatter }] }` — array of matched recipes with frontmatter
 
 **Notes:**
 - Default `status: active`. Use `status: draft` to see discoveries awaiting disposition, or `status: "all"` to opt out of status filtering entirely.
-- Array filters (`tags`, `dietary`, `season`) match **all** listed values (AND/narrowing).
-- `query` (string): free-text filter. Keeps a recipe when **every** whitespace-separated token is a case-insensitive substring of its `title` or any `tag` (token-AND). Deterministic membership only — no ranking, scoring, or fuzzy matching. Use it to surface a named dish ("chicken rice") without silently missing an exact-title match. ANDed with the other filters; absent/empty `query` is a no-op.
+- Array filters (`dietary`, `season`) match **all** listed values (AND/narrowing). **There is no `tags` filter** — keyword/tag matching is done by `query`.
+- `query` (string): the single name/keyword search over `title` **and** `tags`. Tokenize on whitespace, drop connective stopwords (`and`, `or`, `with`, `the`, `a`, `an`, `of`, `in`, `on`, `for`, `&`), then keep a recipe when **every** remaining token is a case-insensitive substring of its `title` or any `tag` (token-AND). Deterministic membership only — no ranking, scoring, or fuzzy matching. So `"chicken and rice"` ≡ `"chicken rice"` and surfaces a recipe titled "Chicken and Rice" even when its tags omit "rice". ANDed with the other filters; an absent, empty, or all-stopword `query` applies no text narrowing.
 - `exclude_cooked_within_days` (number): drop recipes cooked within the last N days. Caller-supplied window, not a stored default.
 - `not_cooked_since` (date): recipes with `last_cooked: null` (never cooked) **pass** this filter.
 
