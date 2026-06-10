@@ -40,6 +40,38 @@ describe("validateFile", () => {
     ).toThrowError(/kind/);
   });
 
+  it("validates cooking_log entries: date, type enum, required recipe/name", () => {
+    expect(() =>
+      validateFile("cooking_log.toml", '[[entries]]\ndate = "2026-06-09"\ntype = "recipe"\nrecipe = "x"\n'),
+    ).not.toThrow();
+    expect(() =>
+      validateFile("cooking_log.toml", '[[entries]]\ndate = "2026-06-09"\ntype = "ready_to_eat"\nname = "lasagna"\n'),
+    ).not.toThrow();
+    expect(() =>
+      validateFile("cooking_log.toml", '[[entries]]\ndate = "June"\ntype = "recipe"\nrecipe = "x"\n'),
+    ).toThrowError(/date/);
+    expect(() =>
+      validateFile("cooking_log.toml", '[[entries]]\ndate = "2026-06-09"\ntype = "ate_out"\nname = "diner"\n'),
+    ).toThrowError(/not one of/);
+    expect(() =>
+      validateFile("cooking_log.toml", '[[entries]]\ndate = "2026-06-09"\ntype = "recipe"\n'),
+    ).toThrowError(/recipe/);
+    expect(() =>
+      validateFile("cooking_log.toml", '[[entries]]\ndate = "2026-06-09"\ntype = "ad_hoc"\n'),
+    ).toThrowError(/name/);
+  });
+
+  it("validates meal_plan rows: required recipe, ISO planned_for", () => {
+    expect(() =>
+      validateFile("meal_plan.toml", '[[planned]]\nrecipe = "x"\nplanned_for = "2026-06-10"\n'),
+    ).not.toThrow();
+    expect(() => validateFile("meal_plan.toml", '[[planned]]\nrecipe = "x"\n')).not.toThrow();
+    expect(() => validateFile("meal_plan.toml", "[[planned]]\nplanned_for = 5\n")).toThrowError(/recipe/);
+    expect(() =>
+      validateFile("meal_plan.toml", '[[planned]]\nrecipe = "x"\nplanned_for = "soon"\n'),
+    ).toThrowError(/planned_for/);
+  });
+
   it("parse-only validates other config TOML", () => {
     expect(() => validateFile("preferences.toml", "default_cooking_nights = 3\n")).not.toThrow();
     expect(() => validateFile("preferences.toml", "= = broken")).toThrowError(/does not parse/);

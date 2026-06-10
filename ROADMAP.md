@@ -336,19 +336,36 @@ The bucket name `have_fresh` goes away too (it asserts a freshness the tool isn'
 
 ---
 
-## Change 11: Variety + retrospection
+## Change 11: Variety + retrospection (cooking log + meal plan)
 
-**Scope:** Implement the `retrospective` tool. Add `diet_principles.md` with your variety rules. Update AGENT_INSTRUCTIONS.md so menu generation honors principles softly, explaining tradeoffs when it can't satisfy all of them. Add a conversational pattern for retrospectives.
+**Scope:** Introduce the durable cooking-history substrate that makes `retrospective` real, fix the `last_cooked` honesty problem, name the two operating modes (plan / cook), and add soft variety honoring. Built via the `cooking-log-and-retrospection` OpenSpec change.
+
+**Data-readiness reframe (decided 2026-06-10, explore session):** As specified, `retrospective` returns `protein_mix` / `cuisine_mix` / `recipes_cooked` — but none are computable from `last_cooked` (a last-write-wins max date; only `underused` works). Same gap Change 08 hit. And `last_cooked` was bumped at menu-**agreement** time, which is dishonest (planning ≠ cooking, violating the order-lifecycle honesty rule). Both are fixed by an event log.
+
+**Two-file model (decided — Option B, split):**
+- **`cooking_log.toml`** — durable, append-only **cooking** log (not an eating log: eating out is never logged; leftovers of an already-logged cook aren't re-logged). Each entry: `date`, `type` (`recipe` | `ready_to_eat` | `ad_hoc`), `recipe` slug (iff `type=recipe`, slug-only — protein/cuisine looked up from the index), or `name` + optional inline `protein`/`cuisine` for non-recipe entries. `type` exists from day one so the **cook-vs-convenience** ratio is possible. `ready_to_eat` consumption decrements the item's on-hand stock in `pantry.toml` (RTE catalogs stay options-only) and doubles as the favored-item signal for re-order.
+- **`meal_plan.toml`** — transient, recipe-grain committed **cook** intent (`[[planned]]` rows: `recipe`, optional `planned_for`). Distinct from `grocery_list.toml` (ingredient-grain buy intent): a planned recipe whose ingredients are all in-pantry would be invisible on the grocery list. Extends the store model: pantry=observation, stockup=conditional intent, grocery_list=committed buy intent, **meal_plan=committed cook intent, cooking_log=realized history**.
+
+**Behavior rewire (decided):** menu agreement writes `[[planned]]` rows and **no longer bumps `last_cooked`**; `last_cooked = max(cooking_log.date where recipe==slug)`, written in the same commit as the cooked entry; the index build soft-validates the two agree.
+
+**Two modes (decided):** **plan mode** = everything today + writing `planned` + a session-start **stale-planned reconcile** ("you planned X, Y, Z — make any?", parallel to the stale-cart check). **Cook mode (minimal here)** = "I'm making / I made X" → confirm, append a cooked entry, bump `last_cooked`, prompt pantry decrements (incl. "use the last of it?"), clear the planned row. No new write tool — it folds into `commit_changes`. The full hands-free guided walkthrough is **Change 15**.
+
+**Tool surface (decided — lean):** new `read_meal_plan` read; `retrospective` now reads `cooking_log.toml` + the recipe index and adds `ready_to_eat_favorites`; `cooking_log`/`meal_plan` writes fold into `commit_changes` (`cooking_log_entries`, `meal_plan_ops`), like `recipe_updates`/`pantry_operations` today.
+
+**Variety dimensions get a controlled vocabulary (decided):** `protein` / `cuisine` frontmatter is validated against allowed coarse buckets (prefer `fish` over `salmon`) so variety rules are reliable — validated when present (absent stays warn-only), seeded by reconciling the corpus. A small cousin of Change 13's component vocabulary. **Re-order suggestions** for favored ready-to-eat items (favored-via-log + low/out in `pantry.toml`) surface in the menu flow and write to `grocery_list`/`stockup` on agreement — in scope here.
+
+**Accepted tradeoff:** `meal_plan` is transient, so there is **no durable record of past plans** — historical "did I cook what I planned last quarter" is intentionally unanswerable (keeps the trend log pure). Current-week adherence is still answerable from the live plan + this week's log.
 
 **Dependencies:** Change 09. (Change 10 helps but isn't strictly required.)
 
 **Deliverables:**
-- `retrospective` tool returning structured cooking-history aggregates
-- Populated `diet_principles.md`
-- Updated AGENT_INSTRUCTIONS.md with variety reasoning patterns
-- Conversational test of "how have I been eating this month?" and variety-aware menu requests
+- `cooking_log.toml` + `meal_plan.toml` schemas + `docs/SCHEMAS.md` entries + `CLAUDE.md` side-effect-file lines (both agent-writable, NOT curated config)
+- `retrospective` returning real aggregates (`recipes_cooked`, `protein_mix`, `cuisine_mix`, `underused`, cadence, cook-vs-convenience); `read_meal_plan`; `commit_changes` `cooking_log_entries` + `meal_plan_ops` sections with the `last_cooked` derivation co-write
+- Index-build validation for both files + the `last_cooked`-consistency warn-only soft-check (no warnings against an empty log)
+- Populated `diet_principles.md`; AGENT_INSTRUCTIONS.md: two modes, plan→`planned` rewire, minimal cook-capture flow, stale-planned reconcile, retrospective pattern, soft variety honoring grounded in `retrospective`
+- `docs/TOOLS.md` synced (real `retrospective` shape, `read_meal_plan`, new `commit_changes` sections)
 
-**Done when:** Menu proposals show awareness of variety principles without being naggy. Retrospectives surface useful patterns.
+**Done when:** Cooking a meal logs an event and bumps `last_cooked` honestly; "how have I been eating this month?" returns real protein/cuisine/cadence/convenience patterns; menu proposals show variety awareness without nagging; planned cooks resume across sessions.
 
 ---
 
@@ -419,6 +436,30 @@ The bucket name `have_fresh` goes away too (it asserts a freshness the tool isn'
 
 ---
 
+## Change 15: Guided cook mode (hands-free)
+
+**Scope:** The full **cook mode** experience deferred from Change 11 — a hands-free, voice-first walkthrough used *while cooking*. The agent paces the user through a recipe's steps, runs timers, and proactively prompts about ingredients as they come up ("add the garlic now"; "you'll need ginger next — still have enough?"). On completion it drives the cook-capture that Change 11 already built. Primarily an AGENT_INSTRUCTIONS.md / conversational-flow change plus whatever read affordances voice pacing needs.
+
+**Why this is its own change (decided 2026-06-10, explore session):** Change 11 ships the *minimal* cook capture ("I made X" → confirm + log + pantry decrement) and, critically, the `cooking_log.toml` / `meal_plan.toml` schema. Guided cook mode is a **pure consumer/writer of those two files** — it adds UX (step pacing, timers, proactive ingredient prompts), not new persistent state — so it lands with **zero schema migration**. Nailing the schema in Change 11 is what lets this defer cleanly. It's also a meatier, voice-mode-specific UX effort worth isolating from the data work.
+
+**Likely decisions to settle at propose time:**
+- Step granularity / pacing model — does the agent read the `## Instructions` list step-by-step, or chunk it? How does the user advance ("next", "done")?
+- Timer mechanism — event-driven only (no background scheduling per the project's no-scheduled-triggers stance), so timers are conversational reminders the user pulls, not pushes.
+- Proactive ingredient prompts — how cook mode decides when to surface "use the last of X?" vs. batching decrements to the end (Change 11 batches at the end; guided mode may interleave).
+- Whether anything beyond the existing reads (`read_recipe`, `read_pantry`, `read_meal_plan`) is needed.
+
+**Dependencies:** Change 11 (the cooking-log + meal-plan substrate and the minimal cook-capture path it consumes).
+
+**Deliverables:**
+- AGENT_INSTRUCTIONS.md guided-cook-mode flow (step pacing, advance/repeat controls, conversational timers, interleaved ingredient prompts)
+- Reuse of Change 11's cook-capture on completion (no new persistent state)
+- Any minimal read affordances voice pacing requires; `docs/TOOLS.md` synced if the surface changes
+- Conversational test of a full hands-free cook from "I'm making X" through logged completion
+
+**Done when:** From a phone in voice mode, hands messy, the user can say "I'm making the arroz caldo," be walked through it step by step with timely ingredient prompts, and finish with the cook logged and the pantry updated — no typing.
+
+---
+
 ## Suggested ordering and parallelization
 
 ```
@@ -453,6 +494,10 @@ The bucket name `have_fresh` goes away too (it asserts a freshness the tool isn'
     ↓
 13 Component vocabulary registry + sequencing
        (seeded by corpus reconciliation; builds suggest_sequencing, moved from 08)
+
+   (independent branches off the above:)
+   14 Newsletter discovery via inbound email   (depends only on 10)
+   15 Guided cook mode (hands-free)            (depends only on 11)
 ```
 
 **Parallelization options:**
@@ -460,6 +505,7 @@ The bucket name `have_fresh` goes away too (it asserts a freshness the tool isn'
 - **05 and 06 can run in parallel after 04** — 06 is repo-data + the Access gate (no Kroger), so it doesn't depend on 05. 06b then needs both. (In the current repo 05 is already done, so 06 is simply next.)
 - 10 and 11 can run in parallel after 09.
 - **Change 14 (newsletter email discovery) depends only on 10** — push-based complement to 10's RSS pull; buildable any time after 10, independent of Kroger work.
+- **Change 15 (guided cook mode) depends only on 11** — it's a pure consumer/writer of the `cooking_log.toml` / `meal_plan.toml` schema Change 11 lands (zero migration), so it can be built any time after 11, independent of 12–14.
 - **`suggest_sequencing` moved from 08 → 13** (decided 2026-06-09): it consumes the component vocabulary that 13 seeds, and would ship dormant if built earlier (1/63 recipes declare a component today). 08 is now pantry-verification + substitution only; the menu-request flow tolerates an absent sequencing result until 13 lands.
 
 **Natural pause points** (where you'd want to actually use the system for a few weeks before continuing):

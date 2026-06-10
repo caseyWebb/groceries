@@ -1,8 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildRecipeUpdate } from "../src/write-tools.js";
+import { buildRecipeUpdate, buildCookingLogUpdate, buildMealPlanUpdate } from "../src/write-tools.js";
 import { applyPantryOperations, markVerified, type PantryItem } from "../src/pantry-write.js";
 import { serializeMarkdown } from "../src/serialize.js";
-import { parseMarkdown } from "../src/parse.js";
+import { parseMarkdown, parseToml } from "../src/parse.js";
 import { GitHubError, type GitHubClient } from "../src/github.js";
 
 const RECIPE = "---\ntitle: Salmon\nstatus: active\nlast_cooked: null\nrating: null\n---\n\n## Ingredients\n- salmon\n";
@@ -49,6 +49,67 @@ describe("buildRecipeUpdate", () => {
   it("maps a missing recipe to not_found", async () => {
     const gh = ghWith({});
     await expect(buildRecipeUpdate(gh, "ghost", {})).rejects.toMatchObject({ code: "not_found" });
+  });
+});
+
+describe("buildCookingLogUpdate", () => {
+  it("appends entries (defaulting date to today) and derives last_cooked for touched recipes", async () => {
+    const gh = ghWith({ "cooking_log.toml": "# header\n" });
+    const { file, added, lastCooked } = await buildCookingLogUpdate(
+      gh,
+      [
+        { type: "recipe", recipe: "salmon", date: "2026-06-09" },
+        { type: "ready_to_eat", name: "lasagna" }, // date defaults to today
+      ],
+      "2026-06-30",
+    );
+    expect(file.path).toBe("cooking_log.toml");
+    expect(added).toHaveLength(2);
+    expect(added[1].date).toBe("2026-06-30");
+    expect(lastCooked.get("salmon")).toBe("2026-06-09");
+    expect(lastCooked.has("lasagna" as string)).toBe(false);
+    const parsed = parseToml(file.content) as { entries: Record<string, unknown>[] };
+    expect(parsed.entries).toHaveLength(2);
+    expect(file.content).toContain("# header"); // header preserved
+  });
+
+  it("derives last_cooked as the max over existing + new entries", async () => {
+    const existing = '[[entries]]\ndate = "2026-06-20"\ntype = "recipe"\nrecipe = "salmon"\n';
+    const gh = ghWith({ "cooking_log.toml": existing });
+    const { lastCooked } = await buildCookingLogUpdate(
+      gh,
+      [{ type: "recipe", recipe: "salmon", date: "2026-06-09" }],
+      "2026-06-30",
+    );
+    // older new entry must not lower last_cooked below the existing max
+    expect(lastCooked.get("salmon")).toBe("2026-06-20");
+  });
+
+  it("rejects an invalid entry as validation_failed", async () => {
+    const gh = ghWith({ "cooking_log.toml": "" });
+    await expect(
+      buildCookingLogUpdate(gh, [{ type: "recipe", date: "2026-06-09" }], "2026-06-30"),
+    ).rejects.toMatchObject({ code: "validation_failed" });
+  });
+});
+
+describe("buildMealPlanUpdate", () => {
+  it("adds a planned row, returning a file", async () => {
+    const gh = ghWith({ "meal_plan.toml": "# header\n" });
+    const { file, applied } = await buildMealPlanUpdate(gh, [
+      { op: "add", recipe: "salmon", planned_for: "2026-07-01" },
+    ]);
+    expect(file).not.toBeNull();
+    expect(applied).toContainEqual({ op: "add", recipe: "salmon" });
+    const parsed = parseToml(file!.content) as { planned: Record<string, unknown>[] };
+    expect(parsed.planned[0]).toMatchObject({ recipe: "salmon", planned_for: "2026-07-01" });
+  });
+
+  it("returns no file when nothing applied (remove of a missing row)", async () => {
+    const gh = ghWith({ "meal_plan.toml": "" });
+    const { file, conflicts } = await buildMealPlanUpdate(gh, [{ op: "remove", recipe: "ghost" }]);
+    expect(file).toBeNull();
+    expect(conflicts).toHaveLength(1);
   });
 });
 

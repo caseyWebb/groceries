@@ -411,13 +411,37 @@ Write to user-curated files. **Content-faithful:** each writes exactly the full 
 
 ### `retrospective(period)`
 
-Aggregate cooking history over a period.
+Aggregate **real** cooking history from `cooking_log.toml` over a period, joining `type=recipe` entries to the recipe index for protein/cuisine.
 
 **Params:**
-- `period` (string): `"30d"` | `"month"` | `"quarter"` | etc.
+- `period` (string, optional, default `"month"`): `"Nd"` (e.g. `"30d"`) | `"week"` | `"month"` | `"quarter"` | `"year"` | `"all"`.
 
 **Returns:**
-- `{ recipes_cooked: [...], protein_mix: {...}, cuisine_mix: {...}, underused: [...] }`
+```
+{
+  period, window: { from, to, days },
+  recipes_cooked:   [{ recipe, count, dates }],   // distinct recipes, with per-cook dates
+  protein_mix:      { <protein>: count },          // counts EVERY cook event; non-recipe entries via inline dims; missing → "unknown"
+  cuisine_mix:      { <cuisine>: count },
+  cadence:          { cooks, weeks, cooks_per_week },   // counts recipe + ad_hoc only (ready_to_eat is not cooking)
+  cook_vs_convenience: { cooked, convenience },         // cooked = recipe + ad_hoc; convenience = ready_to_eat
+  ready_to_eat_favorites: [{ name, count }],            // frequency-ranked; feeds menu-flow restock suggestions
+  underused:        [{ slug, title, last_cooked }]      // active recipes not cooked within the window
+}
+```
+
+**Notes:** `last_cooked` is derived (see `commit_changes`), so `underused` reflects real cook events. Eating out is never logged; leftovers of an already-logged cook are not re-logged.
+
+### `read_meal_plan()`
+
+Return the current meal plan — recipes committed to cook next (transient cook intent). Use at session start to resume.
+
+**Params:** none.
+
+**Returns:**
+- `{ planned: [{ recipe, planned_for }] }` (`planned_for` may be null)
+
+**Notes:** The session-start stale-planned reconcile surfaces only **due** rows (`planned_for` on/before today, or unset).
 
 ### `inventory_hypothetical(items)`
 
@@ -444,16 +468,22 @@ Persist a batch of repo updates as **one** atomic git commit — no cart. The ev
 **Params:**
 ```
 {
-  recipe_updates:       [{ slug, updates }],          // frontmatter merges (last_cooked, rating, status, ...)
+  recipe_updates:       [{ slug, updates }],          // frontmatter merges (rating, status, ...; do NOT set last_cooked by hand)
   pantry_operations:    [{ op, item?, name? }],       // op: add | remove | verify
   pantry_verified:      [name, name, ...],            // reset last_verified_at
   ready_to_eat_drafts:  [{ meal, name, category?, source?, brand?, notes? }],
   ready_to_eat_updates: [{ name, updates }],          // matched by name across meal catalogs
   config_updates:       [{ file, content }],          // file: preferences|taste|diet_principles|substitutions|aliases
+  cooking_log_entries:  [{ type, date?, recipe?, name?, protein?, cuisine? }],  // append cooked meals; date defaults to today
+  meal_plan_ops:        [{ op, recipe, planned_for? }],   // op: add | remove  (committed cook intent)
   commit_message:       string
 }
 ```
 All sections are optional except `commit_message`.
+
+**`cooking_log_entries` (cooking-history).** Appends to `cooking_log.toml`. `type` is `recipe | ready_to_eat | ad_hoc`; `recipe` is required for `type=recipe` (slug-only), `name` for the others. For each `type=recipe` entry, the recipe's `last_cooked` is **derived** (max log date for that slug) and co-written in the **same** commit — never set `last_cooked` via `recipe_updates`. Ready-to-eat consumption is a `{type:"ready_to_eat", name}` entry **plus** a `pantry_operations` `remove` when the user used the last of it (pantry is presence-based — there is no auto-decrement).
+
+**`meal_plan_ops` (meal-planning).** Mutates `meal_plan.toml`. `add` upserts by recipe slug (updating `planned_for`); `remove` drops the slug's row. Menu agreement writes `add` rows; cook-capture / the stale-planned reconcile write `remove`.
 
 **Returns:**
 - `{ commit_sha, summary }`

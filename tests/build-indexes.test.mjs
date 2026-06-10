@@ -13,6 +13,7 @@ import {
   normalizeValue,
   deriveSlug,
   hasH2Section,
+  validateCookingArtifacts,
 } from '../scripts/build-indexes.mjs';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'recipes');
@@ -196,6 +197,83 @@ test('extra H2 sections beyond the required two are allowed', async () => {
   const { errors } = await buildRecipeIndexes(dir);
   assert.deepEqual(errors, []);
   await rm(dir, { recursive: true, force: true });
+});
+
+// --- controlled vocabulary (protein / cuisine) --------------------------
+
+test('hard-fail: out-of-vocabulary protein and cuisine', async () => {
+  const dir = await tmpRecipes({
+    'bad-protein.md': recipe('title: P\nstatus: active\nprotein: salmon\ntime_total: 10\ningredients_key: [x]'),
+    'bad-cuisine.md': recipe('title: C\nstatus: active\nprotein: fish\ncuisine: martian\ntime_total: 10\ningredients_key: [x]'),
+  });
+  const { errors } = await buildRecipeIndexes(dir);
+  assert.ok(errors.some((e) => e.includes('bad-protein.md') && e.includes('protein')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('bad-cuisine.md') && e.includes('cuisine')), errors.join('\n'));
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('in-vocabulary protein/cuisine pass; absent protein only warns', async () => {
+  const dir = await tmpRecipes({
+    'ok.md': recipe('title: Ok\nstatus: active\nprotein: fish\ncuisine: japanese\ntime_total: 10\ningredients_key: [x]'),
+    'noprotein.md': recipe('title: NoP\nstatus: active\ntime_total: 10\ningredients_key: [x]'),
+  });
+  const { errors, warnings } = await buildRecipeIndexes(dir);
+  assert.deepEqual(errors, []);
+  assert.ok(warnings.some((w) => w.includes('noprotein.md') && w.includes('protein')), warnings.join('\n'));
+  await rm(dir, { recursive: true, force: true });
+});
+
+// --- cooking-log + meal-plan validation ---------------------------------
+
+const recipesFixture = { 'arroz-caldo': { last_cooked: '2026-06-09' }, salmon: { last_cooked: null } };
+
+test('cooking artifacts: valid log + plan produce no errors', () => {
+  const { errors } = validateCookingArtifacts({
+    recipes: recipesFixture,
+    cookingLog: { entries: [{ date: '2026-06-09', type: 'recipe', recipe: 'arroz-caldo' }, { date: '2026-06-08', type: 'ready_to_eat', name: 'lasagna' }] },
+    mealPlan: { planned: [{ recipe: 'salmon', planned_for: '2026-06-12' }] },
+  });
+  assert.deepEqual(errors, []);
+});
+
+test('cooking artifacts: hard-fail on unknown type, unresolved slugs, bad dates', () => {
+  const { errors } = validateCookingArtifacts({
+    recipes: recipesFixture,
+    cookingLog: {
+      entries: [
+        { date: '2026-06-09', type: 'ate_out', name: 'diner' }, // unknown type
+        { date: '2026-06-09', type: 'recipe', recipe: 'ghost' }, // unresolved slug
+        { date: 'nope', type: 'ad_hoc', name: 'x' }, // bad date
+      ],
+    },
+    mealPlan: { planned: [{ recipe: 'ghost' }, { recipe: 'salmon', planned_for: 'soon' }] },
+  });
+  assert.ok(errors.some((e) => e.includes('invalid type')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('unknown slug "ghost"') && e.includes('cooking_log')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('invalid or missing date')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('meal_plan') && e.includes('unknown slug "ghost"')), errors.join('\n'));
+  assert.ok(errors.some((e) => e.includes('planned_for')), errors.join('\n'));
+});
+
+test('cooking artifacts: last_cooked soft-check warns on drift, silent when absent from log', () => {
+  const { errors, warnings } = validateCookingArtifacts({
+    recipes: { stale: { last_cooked: '2026-06-01' }, neverlogged: { last_cooked: '2025-01-01' } },
+    cookingLog: { entries: [{ date: '2026-06-10', type: 'recipe', recipe: 'stale' }] },
+    mealPlan: null,
+  });
+  assert.deepEqual(errors, []);
+  assert.ok(warnings.some((w) => w.includes('stale') && w.includes('last_cooked')), warnings.join('\n'));
+  assert.ok(!warnings.some((w) => w.includes('neverlogged')), 'recipe absent from the log must not warn');
+});
+
+test('cooking artifacts: accepts a bare TOML date (Date) as well as a string', () => {
+  const { errors, warnings } = validateCookingArtifacts({
+    recipes: { x: { last_cooked: '2026-06-09' } },
+    cookingLog: { entries: [{ date: new Date('2026-06-09T00:00:00Z'), type: 'recipe', recipe: 'x' }] },
+    mealPlan: null,
+  });
+  assert.deepEqual(errors, []);
+  assert.deepEqual(warnings, []);
 });
 
 // --- TOML parse-check ----------------------------------------------------

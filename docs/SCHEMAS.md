@@ -10,8 +10,8 @@ YAML frontmatter at the top of each recipe markdown file. Body below is freeform
 ---
 title: Lemon Garlic Roasted Chicken
 tags: [chicken, mediterranean, sheet-pan, weeknight]
-protein: chicken                # chicken | beef | pork | lamb | fish | shellfish | vegetarian | vegan | mixed
-cuisine: mediterranean
+protein: chicken                # controlled vocab: chicken | beef | pork | lamb | turkey | fish | shellfish | egg | tofu | vegetarian | vegan | mixed
+cuisine: mediterranean          # controlled vocab (coarse buckets); see the cuisine list below
 style: sheet-pan                # sheet-pan | one-pot | grill | braise | stir-fry | etc.
 time_total: 50                  # minutes, integer
 time_active: 15                 # minutes, integer
@@ -38,6 +38,7 @@ source: https://www.seriouseats.com/lemon-garlic-roasted-chicken
 **Notes:**
 - `status` lifecycle: new RSS imports default to `draft`. User feedback promotes to `active` (with rating) or rejects to `rejected`. Drafts past ~6 months get archived (Phase 5).
 - `uses_components` / `produces_components`: slugs of other recipes, optional. Used by `suggest_sequencing`.
+- `protein` and `cuisine` are **controlled vocabularies** (coarse buckets — `fish` not `salmon`) so variety reasoning is reliable. A value **present** but outside its set is a hard build failure; **absence** keeps the warn-only treatment. Extending a vocabulary is a deliberate edit to the allowed sets in `scripts/build-indexes.mjs`. Current cuisine set: `american, brazilian, cajun, caribbean, chinese, cuban, filipino, french, german, greek, indian, italian, japanese, korean, mediterranean, mexican, moroccan, southwestern, spanish, thai, vietnamese`.
 - `ingredients_key`: top 5–7 ingredients for filtering. Full ingredient list lives in the body.
 
 ### Recipe body structural contract
@@ -127,6 +128,53 @@ added_at = "2026-06-09"
 - `source` carries provenance for order-time dedup/behavior: `pantry_low`/`stockup` were promoted (don't re-prompt); `menu` aggregates with recipe needs; `ad_hoc` is a one-off.
 - `note` holds a **one-off** brand request ("the fancy olive oil this time") — explicitly NOT `preferences.toml`, which is for standing dispositions.
 - Lifecycle: `active → in_cart → ordered → received`. `received` is terminal (entry removed + pantry restocked). The transitions past `active` arrive with order placement in Change 06b.
+
+## cooking_log.toml
+
+The durable, append-only **cooking** log (not an eating log). One entry per cooking event or at-home convenience meal. **Eating out is never logged**, and **leftovers of an already-logged cook are not re-logged** (one cook that feeds several meals is one entry). This is the trend spine `retrospective` reads, and the source `last_cooked` is **derived** from: `last_cooked` for a recipe == the maximum entry `date` whose `recipe` equals that slug. Agent-writable side-effect file (NOT user-curated config).
+
+```toml
+# cooking_log.toml
+
+[[entries]]
+date = "2026-06-09"            # ISO date (required)
+type = "recipe"               # recipe | ready_to_eat | ad_hoc (required)
+recipe = "arroz-caldo"        # slug; present iff type = recipe
+
+[[entries]]
+date = "2026-06-08"
+type = "ready_to_eat"
+name = "Kroger frozen lasagna"   # present for ready_to_eat / ad_hoc
+
+[[entries]]
+date = "2026-06-07"
+type = "ad_hoc"
+name = "fridge-clearout fried rice"
+protein = "mixed"             # optional inline dims for non-recipe entries so
+cuisine = "chinese"          # they still count in retrospective mixes
+```
+
+**Notes:**
+- `type = recipe` entries are slug-only — protein/cuisine are looked up from the recipe index, never duplicated, so recategorizing a recipe retroactively corrects its history.
+- `ready_to_eat` consumption also decrements the item's on-hand stock in `pantry.toml` (the RTE catalogs under `ready_to_eat/*.toml` stay pure options lists with no stock field) and its accumulating frequency is the favored-item signal for re-order suggestions.
+- Cadence ("cooks/week") counts `recipe` + `ad_hoc` only; `ready_to_eat` is the convenience side of the cook-vs-convenience split.
+- Append-only by tool. Removing an entry is a manual edit; a `type = recipe` entry whose slug no recipe resolves to is a **hard** build failure (archival keeps the file, so history resolves; deletion-with-history is intentionally blocked).
+
+## meal_plan.toml
+
+The transient, recipe-grain record of **committed cook intent** — what the agent has agreed to cook next. Distinct from `grocery_list.toml` (the ingredient-grain BUY list): a planned recipe whose ingredients are all in the pantry still belongs here even though nothing is bought. Rows are cleared as they resolve (cooked → removed; abandoned → dropped). Agent-writable side-effect file (NOT user-curated config).
+
+```toml
+# meal_plan.toml
+
+[[planned]]
+recipe = "arroz-caldo"        # slug (required)
+planned_for = "2026-06-10"    # ISO date the cook is slated for (optional)
+```
+
+**Notes:**
+- The session-start stale-planned reconcile surfaces only **due** rows — `planned_for` on or before today, or unset — and leaves future-dated plans alone.
+- Extends the store model: `pantry` = observation, `stockup` = conditional intent, `grocery_list` = committed buy intent, **`meal_plan` = committed cook intent**, **`cooking_log` = realized history**.
 
 ## preferences.toml
 

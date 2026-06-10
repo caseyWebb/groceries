@@ -13,6 +13,7 @@ import { registerWriteTools } from "./write-tools.js";
 import { registerGroceryListTools } from "./grocery-tools.js";
 import { registerOrderTools } from "./order-tools.js";
 import { registerDiscoveryTools } from "./discovery-tools.js";
+import { registerCookingTools } from "./cooking-tools.js";
 import { filterRecipes, type RecipeFilters, type RecipeIndex } from "./recipes.js";
 import { createKrogerClient, type KrogerCandidate } from "./kroger.js";
 import {
@@ -575,6 +576,10 @@ export function buildServer(env: Env): McpServer {
   // atomic commit engine; no cart or external-service writes.
   registerWriteTools(server, gh);
   registerGroceryListTools(server, gh);
+
+  // Cooking history + meal plan: read_meal_plan (resume) and retrospective.
+  // The corresponding writes ride commit_changes (cooking_log_entries / meal_plan_ops).
+  registerCookingTools(server, gh);
 
   // Discovery: RSS recipe candidates, parse-only URL import, draft create.
   registerDiscoveryTools(server, gh);

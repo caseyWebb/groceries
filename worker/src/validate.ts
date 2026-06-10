@@ -14,6 +14,8 @@ const PANTRY_CATEGORIES = ["pantry", "fridge", "freezer", "spices"];
 const READY_TO_EAT_STATUSES = ["active", "draft", "rejected"];
 const GROCERY_STATUSES = ["active", "in_cart", "ordered"];
 const GROCERY_KINDS = ["grocery", "household", "other"];
+const COOKING_LOG_TYPES = ["recipe", "ready_to_eat", "ad_hoc"];
+const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function fail(path: string, message: string): never {
   throw new ToolError("validation_failed", `${path}: ${message}`, { path });
@@ -83,6 +85,39 @@ export function validateFile(path: string, content: string): void {
       }
       checkEnum(path, "status", it.status, GROCERY_STATUSES, true);
       checkEnum(path, "kind", it.kind, GROCERY_KINDS, false);
+    }
+    return;
+  }
+
+  if (path === "cooking_log.toml") {
+    const parsed = parseTomlOrFail(path, content);
+    const entries = Array.isArray(parsed.entries) ? (parsed.entries as Record<string, unknown>[]) : [];
+    for (const e of entries) {
+      if (typeof e.date !== "string" || !ISO_DATE_RE.test(e.date)) {
+        fail(path, `entry has an invalid or missing \`date\`: ${JSON.stringify(e.date)}`);
+      }
+      checkEnum(path, "type", e.type, COOKING_LOG_TYPES, true);
+      if (e.type === "recipe") {
+        if (typeof e.recipe !== "string" || e.recipe.length === 0) {
+          fail(path, "recipe entry is missing required field `recipe` (slug)");
+        }
+      } else if (typeof e.name !== "string" || e.name.length === 0) {
+        fail(path, `${String(e.type)} entry is missing required field \`name\``);
+      }
+    }
+    return;
+  }
+
+  if (path === "meal_plan.toml") {
+    const parsed = parseTomlOrFail(path, content);
+    const planned = Array.isArray(parsed.planned) ? (parsed.planned as Record<string, unknown>[]) : [];
+    for (const p of planned) {
+      if (typeof p.recipe !== "string" || p.recipe.length === 0) {
+        fail(path, "planned entry is missing required field `recipe` (slug)");
+      }
+      if (p.planned_for != null && (typeof p.planned_for !== "string" || !ISO_DATE_RE.test(p.planned_for))) {
+        fail(path, `planned entry has an invalid \`planned_for\`: ${JSON.stringify(p.planned_for)}`);
+      }
     }
     return;
   }

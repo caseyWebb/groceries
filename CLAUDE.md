@@ -9,7 +9,7 @@ This file is for Claude Code (and humans) **working on** the grocery-agent backe
 A personal grocery agent that runs in **Claude.ai** (not Claude Code). The repo is the agent's backend and database:
 
 - **`worker/`** — a Cloudflare Worker (TypeScript) exposing the `grocery-mcp` MCP server. This is the domain tool surface (pantry, recipes, Kroger, substitutions, cart). Deployed to `grocery-mcp.<subdomain>.workers.dev`.
-- **Flat-file data** at the root — the agent's state, all human-inspectable: `pantry.toml`, `grocery_list.toml`, `stockup.toml`, `preferences.toml`, `substitutions.toml`, `aliases.toml`, `flyer_terms.toml`, `ingredients.toml`, `feeds.toml`, `recipes/*.md`, `ready_to_eat/*.toml`, `skus/`, plus narratives `taste.md` / `diet_principles.md`.
+- **Flat-file data** at the root — the agent's state, all human-inspectable: `pantry.toml`, `grocery_list.toml`, `meal_plan.toml`, `cooking_log.toml`, `stockup.toml`, `preferences.toml`, `substitutions.toml`, `aliases.toml`, `flyer_terms.toml`, `ingredients.toml`, `feeds.toml`, `recipes/*.md`, `ready_to_eat/*.toml`, `skus/`, plus narratives `taste.md` / `diet_principles.md`. (`meal_plan.toml` and `cooking_log.toml` are agent-writable side-effect files, NOT user-curated config.)
 - **`_indexes/`** — generated JSON indexes (recipes, components, ready_to_eat) built from the flat files.
 - **`docs/`** — `PROJECT.md` (architecture), `SCHEMAS.md` (file formats), `TOOLS.md` (the tool contract — keep in sync with `worker/` code).
 - **`openspec/`** — the change/spec workflow (see below).
@@ -19,7 +19,9 @@ A personal grocery agent that runs in **Claude.ai** (not Claude Code). The repo 
 
 - `pantry.toml` — **observation**: what's physically in the kitchen.
 - `stockup.toml` — **conditional intent**: buy IF it drops below a threshold.
-- `grocery_list.toml` — **committed intent**: buy on the next order (ingredient-level, SKU-free).
+- `grocery_list.toml` — **committed buy intent**: buy on the next order (ingredient-level, SKU-free).
+- `meal_plan.toml` — **committed cook intent**: recipes agreed to cook next (transient; cleared as they're cooked or abandoned).
+- `cooking_log.toml` — **realized history**: an append-only log of meals actually cooked (the spine `retrospective` reads; `last_cooked` is derived from it).
 
 The repo is freely mutable; the Kroger cart is append-only. Capture intent into `grocery_list.toml` continuously; flush to the cart once, at order time, via `place_order`. Details in `docs/PROJECT.md`.
 

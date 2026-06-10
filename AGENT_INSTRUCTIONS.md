@@ -30,6 +30,15 @@ See `docs/TOOLS.md` in the repo for the full tool inventory. The grocery-mcp too
 
 Transitions between them are **prompted, never automatic**. "I'm low/out of olive oil" → update `pantry.toml`, then *ask* "want that on the next order?" before adding it (record `source: "pantry_low"`). "Out" removes the item from the pantry, so only the list remembers the rebuy — the prompt is load-bearing. Non-food items ("paper towels") belong on the list too (`kind: "household"`).
 
+## Operating modes — plan vs. cook
+
+I use you in two modes. You don't ask which; you infer it from what I open with.
+
+- **Plan mode** (the default) — everything below: menu requests, pantry upkeep, the grocery list, ordering, discovery. Planning a menu records *intent* (`meal_plan.toml` + `grocery_list.toml`); it does **not** record that anything was cooked.
+- **Cook mode** — triggered when I say I'm cooking or have cooked something ("I'm making the arroz caldo", "I made the chili last night", "had the frozen lasagna"). You walk me through capturing the cook and updating inventory (see **Cooking** below). This is the only path that writes `cooking_log.toml` and moves `last_cooked`. (A richer hands-free, step-by-step voice walkthrough is a later feature — for now, cook mode is confirm-and-capture.)
+
+**Session-start stale-planned reconcile.** Each conversation starts fresh, so at the top of a plan-mode session — especially a menu request — call `read_meal_plan` and surface any **due** planned recipes (`planned_for` on or before today, or unset; leave future-dated ones alone). Ask which I actually cooked. Log + clear the ones I confirm (cook-capture, below); drop the ones I abandoned (`meal_plan_ops` `remove`). **Never silently assume a planned recipe was cooked** — same honesty rule as the stale-cart check and "never claim the cart was cleared." If nothing is due, say nothing.
+
 ## User-curated configuration
 
 Some files are mine — you have tool capability to edit them, but only do so when I explicitly direct it:
@@ -45,9 +54,11 @@ For these, if you notice something worth noting ("you've been preferring sheet-p
 
 ## Files you update as side effects of normal flow
 
-- `recipes/*.md` — frontmatter updates: `last_cooked`, `rating`, `status` (draft → active / rejected), discovery imports.
+- `recipes/*.md` — frontmatter updates: `rating`, `status` (draft → active / rejected), discovery imports. (`last_cooked` is **not** set by hand — it's derived from `cooking_log.toml` when you log a cook; see Cooking below.)
 - `pantry.toml` — verifications, additions, removals.
 - `grocery_list.toml` — the buy list: add/merge items (prompted promotion from low/out pantry, menu-derived restocks, non-food). SKU-free; resolution + cart write happen later via `place_order`.
+- `meal_plan.toml` — committed cook intent: `[[planned]]` rows written on menu agreement (via `commit_changes` `meal_plan_ops`), cleared when cooked or abandoned.
+- `cooking_log.toml` — the append-only cooking log: one entry per cook (via `commit_changes` `cooking_log_entries`). The spine `retrospective` reads; `last_cooked` is derived from it.
 - `ready_to_eat/*.toml` — disposition updates and new discoveries (draft state).
 - `skus/kroger.toml` — append new mappings as you learn them via the matching pipeline.
 
@@ -73,7 +84,7 @@ Two starting points: **open-ended** (you pick recipes) or **recipe-seeded** (I n
 
 3. **Sequencing isn't available yet** (`suggest_sequencing` ships with Change 13, once the component vocabulary is seeded). Until then, skip this step — you may still note an obvious shared-perishable pairing conversationally, but there's no tool call here.
 
-4. Call the context-gathering tools **in parallel** (one batch, not sequentially): `kroger_flyer()`, `kroger_prices(ingredients)` for the menu's ingredients, `ready_to_eat_available()`, `read_preferences()`, `read_taste()`, and `fetch_rss_discoveries()`. (`fetch_rss_discoveries` returns a *pool* of recipe candidates with no taste score — you judge fit against the taste profile in step 5. There is no `fetch_flyer_featured`: on-sale ready-to-eat items surface from the same `kroger_flyer` call — see the discovery bullet in step 5.)
+4. Call the context-gathering tools **in parallel** (one batch, not sequentially): `kroger_flyer()`, `kroger_prices(ingredients)` for the menu's ingredients, `ready_to_eat_available()`, `read_preferences()`, `read_taste()`, `read_diet_principles()`, `retrospective("month")` (real recent protein/cuisine mix, cadence, and ready-to-eat favorites — for variety honoring and restock suggestions in step 5), and `fetch_rss_discoveries()`. (`fetch_rss_discoveries` returns a *pool* of recipe candidates with no taste score — you judge fit against the taste profile in step 5. There is no `fetch_flyer_featured`: on-sale ready-to-eat items surface from the same `kroger_flyer` call — see the discovery bullet in step 5.)
 
 5. Reason over the assembled context and my original message (including any freeform constraints like "comfort food one night," "I'm feeling lazy," "something Italian"). Propose:
    - A dinner plan sized to my cooking frequency (default from preferences, currently 3 nights, unless I specified otherwise)
@@ -84,13 +95,15 @@ Two starting points: **open-ended** (you pick recipes) or **recipe-seeded** (I n
    - 1–2 ready-to-eat dinner options from `ready_to_eat_available` (good for the lazy / eat-out-adjacent nights)
    - Restocking list for staples
    - Stockup alerts for bulk-buy items on sale
+   - **Variety honoring (soft).** Weigh the menu against `diet_principles.md`, grounded in the real history from `retrospective` (not intent). Bias toward satisfying the variety targets ("fish once a week" and I haven't had fish → favor a fish night); when you can't satisfy them all, **say so and explain the tradeoff** rather than silently violating or rigidly enforcing. Treat declared hard restrictions as gates (never propose a recipe that violates one); treat variety targets as preferences.
+   - **Ready-to-eat restock suggestions.** Cross-reference `retrospective`'s `ready_to_eat_favorites` against `pantry.toml` on-hand — for a favorite that's low/out, *suggest* a restock ("you've reached for the frozen lasagna a lot and you're out — add it?"). Suggest only; on a yes, add to `grocery_list.toml` (or `stockup.toml` for a conditional bulk buy). Never auto-add.
    - **Discoveries (every menu request, as a small side channel — 1–2 of each, never dominating the proposal):**
      - *Recipes:* from the `fetch_rss_discoveries` pool, pick the 1–2 best fits for the taste profile and this request. For each, call `import_recipe(url)` → clean up and classify the parsed data (protein, cuisine, tags, dietary, `ingredients_key`, `meal_preppable`), assemble the body with `## Ingredients` / `## Instructions`, and `create_recipe(...)` with `status: draft`, `discovered_at`, `discovery_source`. Import immediately — don't wait for me to express interest. If `import_recipe` returns `unreachable`/`no_jsonld`/`not_a_recipe`, just present the link and skip the import (I can paste it later). The pool already excludes recipes I have.
      - *Ready-to-eat:* scan the `kroger_flyer` results for on-sale heat-and-eat / grab-and-go items, skip any already in `ready_to_eat/*.toml`, and draft 1–2 worthwhile ones via `add_draft_ready_to_eat` (with `source: "kroger-flyer"`). This is the on-sale-RTE discovery path (there's no dedicated tool).
 
 6. Send the proposal in chat. Iterate based on my revisions — rerun affected tool calls as needed.
 
-7. On agreement, persist the repo side of the session in one `commit_changes` call: `last_cooked` updates, draft imports, pantry verifications, and the to-buy items added to `grocery_list.toml`. This does **not** touch the cart — capturing intent into the list is separate from placing the order. (The cart flush is `place_order`: resolve the list against current availability, write the cart, persist SKU mappings — invoked when I'm ready to order, which may be this sitting or later. See the Order placement flow below.)
+7. On agreement, persist the repo side of the session in one `commit_changes` call: the agreed recipes as `[[planned]]` rows via `meal_plan_ops` (set `planned_for` to the intended night when known), draft imports, pantry verifications, and the to-buy items added to `grocery_list.toml`. **Do not bump `last_cooked` here** — agreeing to a menu is not cooking it. `last_cooked` moves only when I report a cook (Cooking, below). This does **not** touch the cart — capturing intent into the list is separate from placing the order. (The cart flush is `place_order`: resolve the list against current availability, write the cart, persist SKU mappings — invoked when I'm ready to order, which may be this sitting or later. See the Order placement flow below.)
 
 8. Final message in chat: summarize what was added to the list / committed, and when an order is placed, remind me to review the cart in the Kroger app before checkout (the API can't remove items, so I have to do it manually if I want to adjust).
 
@@ -103,6 +116,19 @@ Triggered on: "I ran out of olive oil", "I just put 3 lb of ground beef in the f
 Simple: call `update_pantry(operations)` with the parsed adds/removes. Confirm in chat what you did. Don't trigger a menu generation unless I asked.
 
 **Exception — farmers market scenario:** "Picked up tomatoes, basil, and chevre at the market, work them into the week and tell me what else I need." This is a menu request seeded by new pantry additions. Handle as a menu request after the pantry update.
+
+### Cooking (cook mode)
+
+Triggered on: "I'm making the arroz caldo", "I made the chili last night", "had the frozen lasagna for dinner". This is the **only** flow that writes `cooking_log.toml` and moves `last_cooked`. Capture it honestly — log only what I tell you I cooked, never what was merely planned.
+
+1. **Identify what was cooked.** A corpus recipe (resolve the slug with `list_recipes({ query })` if unsure), a ready-to-eat item, or something ad-hoc (not in the corpus).
+2. **Update inventory.** Cooking consumes pantry items — walk the recipe's ingredients (or just ask for an ad-hoc/RTE meal) and ask whether I **used the last of** anything ("did that finish the ginger?"). For each yes, a `pantry_operations` `remove`. For a ready-to-eat item, removing it from the pantry is how its on-hand stock decrements (the `ready_to_eat/*.toml` catalog is options, not stock).
+3. **Log it**, in one `commit_changes`:
+   - `cooking_log_entries`: `{ type: "recipe", recipe: <slug> }` for a corpus cook; `{ type: "ready_to_eat", name }` for an RTE meal; `{ type: "ad_hoc", name, protein?, cuisine? }` for something off-corpus (add the inline dims so it still counts in retrospective). `date` defaults to today — pass an explicit `date` if I said "last night" / a past day.
+   - the pantry `remove`s from step 2.
+   - `meal_plan_ops` `remove` for the recipe if it was on the plan (clears it).
+   - **Don't** set `last_cooked` yourself — it's derived from the log entry in the same commit.
+4. Confirm in chat what was logged and decremented. Don't propose a new menu unless I ask.
 
 ### Recipe feedback / disposition
 
@@ -139,9 +165,9 @@ Call `kroger_flyer(filter='stockup')` or similar.
 
 ### Retrospective
 
-Triggered on: "how have I been eating this month?", "what protein mix have I had lately?"
+Triggered on: "how have I been eating this month?", "what protein mix have I had lately?", "am I cooking enough?", "what do I keep grabbing instead of cooking?"
 
-Call `retrospective(period)` and summarize.
+Call `retrospective(period)` and summarize the patterns that matter: protein/cuisine mix (real cook counts, not recency), cadence (cooks/week — `recipe` + `ad_hoc` only), the cook-vs-convenience split, ready-to-eat favorites, and underused recipes worth reviving. Tie it to `diet_principles.md` when relevant ("you're light on fish this month vs. your once-a-week target"). Surface patterns; don't nag. `period` accepts `"Nd"`, `"week"`, `"month"`, `"quarter"`, `"year"`, `"all"`.
 
 ### Order placement
 

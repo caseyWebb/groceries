@@ -14,6 +14,15 @@ import { serializeMarkdown, stringifyTomlWithHeader } from "./serialize.js";
 import { ToolError, runTool } from "./errors.js";
 import { commitFiles } from "./commit.js";
 import { applyPantryOperations, markVerified, type PantryItem } from "./pantry-write.js";
+import {
+  COOKING_LOG_PATH,
+  entriesOf,
+  appendEntries,
+  deriveLastCooked,
+  validateNewEntry,
+  type CookingLogEntry,
+} from "./cooking-log.js";
+import { MEAL_PLAN_PATH, plannedOf, applyMealPlanOps, type MealPlanOp } from "./meal-plan.js";
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const MEALS = ["breakfast", "lunch", "dinner"] as const;
@@ -74,6 +83,75 @@ async function buildPantryUpdate(
     file: { path: "pantry.toml", content },
     applied: [...opResult.applied, ...verified.map((name) => ({ op: "verify" as const, name }))],
     conflicts,
+  };
+}
+
+/** Normalize a raw cooking-log entry input: default date to today, drop empties. */
+function makeLogEntry(raw: Record<string, unknown>, todayDate: string): CookingLogEntry {
+  const entry: CookingLogEntry = {
+    date: typeof raw.date === "string" && raw.date ? raw.date : todayDate,
+    type: raw.type as CookingLogEntry["type"],
+  };
+  if (typeof raw.recipe === "string") entry.recipe = raw.recipe;
+  if (typeof raw.name === "string") entry.name = raw.name;
+  if (typeof raw.protein === "string") entry.protein = raw.protein;
+  if (typeof raw.cuisine === "string") entry.cuisine = raw.cuisine;
+  return entry;
+}
+
+/**
+ * Append cooking-log entries. Returns the file to commit, the appended entries,
+ * and the derived last_cooked per recipe slug (max date over existing + new),
+ * which the caller co-writes onto recipe frontmatter in the SAME commit.
+ */
+export async function buildCookingLogUpdate(
+  gh: GitHubClient,
+  rawEntries: Record<string, unknown>[],
+  todayDate: string,
+): Promise<{ file: TreeFile; added: CookingLogEntry[]; lastCooked: Map<string, string> }> {
+  const text = (await readOptional(gh, COOKING_LOG_PATH)) ?? "";
+  const parsed = text ? parseToml(text, COOKING_LOG_PATH) : {};
+  const existing = entriesOf(parsed);
+
+  const additions = rawEntries.map((r) => makeLogEntry(r, todayDate));
+  for (const e of additions) {
+    const err = validateNewEntry(e);
+    if (err) throw new ToolError("validation_failed", err);
+  }
+
+  const all = appendEntries(existing, additions);
+  // Only co-write last_cooked for recipes touched by THIS call's additions.
+  const touched = new Set(additions.filter((e) => e.type === "recipe" && e.recipe).map((e) => e.recipe!));
+  const derived = deriveLastCooked(all);
+  const lastCooked = new Map<string, string>();
+  for (const slug of touched) {
+    const max = derived.get(slug);
+    if (max) lastCooked.set(slug, max);
+  }
+
+  return {
+    file: { path: COOKING_LOG_PATH, content: stringifyTomlWithHeader(text, { ...parsed, entries: all }) },
+    added: additions,
+    lastCooked,
+  };
+}
+
+/** Apply meal-plan add/remove ops. Returns the file (null when nothing changed) + report. */
+export async function buildMealPlanUpdate(
+  gh: GitHubClient,
+  ops: MealPlanOp[],
+): Promise<{ file: TreeFile | null; applied: unknown[]; conflicts: unknown[] }> {
+  const text = (await readOptional(gh, MEAL_PLAN_PATH)) ?? "";
+  const parsed = text ? parseToml(text, MEAL_PLAN_PATH) : {};
+  const planned = plannedOf(parsed);
+  const result = applyMealPlanOps(planned, ops);
+  if (result.applied.length === 0) {
+    return { file: null, applied: result.applied, conflicts: result.conflicts };
+  }
+  return {
+    file: { path: MEAL_PLAN_PATH, content: stringifyTomlWithHeader(text, { ...parsed, planned: result.items }) },
+    applied: result.applied,
+    conflicts: result.conflicts,
   };
 }
 
@@ -267,7 +345,7 @@ export function registerWriteTools(server: McpServer, gh: GitHubClient): void {
     "commit_changes",
     {
       description:
-        "Persist a batch of repo updates as ONE commit (no cart). Use at the end of a session to keep the git log clean instead of calling the granular tools repeatedly.",
+        "Persist a batch of repo updates as ONE commit (no cart). Use at the end of a session to keep the git log clean instead of calling the granular tools repeatedly. cooking_log_entries append cooked meals (date defaults to today) and, for type=recipe, derive the recipe's last_cooked (max log date) in the SAME commit — never set last_cooked by hand. meal_plan_ops add/remove committed cook intent. Ready-to-eat consumption is a cooking_log_entries {type:'ready_to_eat'} plus a pantry_operations remove when the user used the last of it.",
       inputSchema: {
         recipe_updates: z
           .array(z.object({ slug: z.string(), updates: z.record(z.string(), z.unknown()) }))
@@ -300,6 +378,27 @@ export function registerWriteTools(server: McpServer, gh: GitHubClient): void {
         config_updates: z
           .array(z.object({ file: z.enum(["preferences", "taste", "diet_principles", "substitutions", "aliases"]), content: z.string() }))
           .optional(),
+        cooking_log_entries: z
+          .array(
+            z.object({
+              date: z.string().optional(),
+              type: z.enum(["recipe", "ready_to_eat", "ad_hoc"]),
+              recipe: z.string().optional(),
+              name: z.string().optional(),
+              protein: z.string().optional(),
+              cuisine: z.string().optional(),
+            }),
+          )
+          .optional(),
+        meal_plan_ops: z
+          .array(
+            z.object({
+              op: z.enum(["add", "remove"]),
+              recipe: z.string(),
+              planned_for: z.string().nullable().optional(),
+            }),
+          )
+          .optional(),
         commit_message: z.string(),
       },
     },
@@ -308,11 +407,38 @@ export function registerWriteTools(server: McpServer, gh: GitHubClient): void {
         const files: TreeFile[] = [];
         const summary: Record<string, unknown> = {};
 
-        for (const r of payload.recipe_updates ?? []) {
-          files.push(await buildRecipeUpdate(gh, r.slug, r.updates));
+        // Cooking log first: appending entries derives last_cooked, which is then
+        // merged into the recipe-frontmatter updates so both land in one commit.
+        let derivedLastCooked = new Map<string, string>();
+        if ((payload.cooking_log_entries?.length ?? 0) > 0) {
+          const { file, added, lastCooked } = await buildCookingLogUpdate(
+            gh,
+            payload.cooking_log_entries!,
+            today(),
+          );
+          files.push(file);
+          derivedLastCooked = lastCooked;
+          summary.cooking_log = { added: added.length };
         }
-        if (summary && (payload.recipe_updates?.length ?? 0) > 0) {
-          summary.recipes = payload.recipe_updates!.map((r) => r.slug);
+
+        // Merge explicit recipe_updates with derived last_cooked into one update
+        // per slug (derivation wins for last_cooked — it must reflect the log).
+        const recipeUpdates = new Map<string, Record<string, unknown>>();
+        for (const r of payload.recipe_updates ?? []) {
+          recipeUpdates.set(r.slug, { ...(recipeUpdates.get(r.slug) ?? {}), ...r.updates });
+        }
+        for (const [slug, lastCooked] of derivedLastCooked) {
+          recipeUpdates.set(slug, { ...(recipeUpdates.get(slug) ?? {}), last_cooked: lastCooked });
+        }
+        for (const [slug, updates] of recipeUpdates) {
+          files.push(await buildRecipeUpdate(gh, slug, updates));
+        }
+        if (recipeUpdates.size > 0) summary.recipes = [...recipeUpdates.keys()];
+
+        if ((payload.meal_plan_ops?.length ?? 0) > 0) {
+          const { file, applied, conflicts } = await buildMealPlanUpdate(gh, payload.meal_plan_ops!);
+          if (file) files.push(file);
+          summary.meal_plan = { applied, conflicts };
         }
 
         if ((payload.pantry_operations?.length ?? 0) > 0 || (payload.pantry_verified?.length ?? 0) > 0) {
