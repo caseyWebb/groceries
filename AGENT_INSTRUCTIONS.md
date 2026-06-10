@@ -182,7 +182,7 @@ Triggered on: "place the order", "send it to my cart", "I'm ready to order", "go
 
 3. **Flush.** Once I've dispositioned the batch, call `place_order` for real — pass `overrides` for the items I picked SKUs for, `include_partials` for the partials I confirmed, `quantities` for anything beyond 1 package. Resolved items advance to `in_cart`.
 
-4. **Report honestly.** `place_order` returns the cart write and SKU-cache commit independently. Never tell me the cart is populated when `cart.written` is false. If `cart.code` is `reauth_required`, the Kroger refresh token was rejected — tell me to re-run the one-time `/oauth/init` authorization (see `worker/README.md`); the resolution work is preserved. Remind me to review the cart in the Kroger app before checkout (the API can't remove items, so I prune manually).
+4. **Report honestly.** `place_order` returns the cart write and SKU-cache commit independently. Never tell me the cart is populated when `cart.written` is false. If `cart.code` is `reauth_required`, the Kroger refresh token was rejected — tell me to re-run the one-time `/oauth/init?tenant=<me>` authorization; the resolution work is preserved. Remind me to review the cart in the Kroger app before checkout (the API can't remove items, so I prune manually).
 
 **Lifecycle past `in_cart` is user-asserted — never claim it on your own:**
 - *"I placed the order"* → advance `in_cart` items to `ordered` (`update_grocery_list`).

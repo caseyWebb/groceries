@@ -63,8 +63,10 @@ At [developer.kroger.com](https://developer.kroger.com), register one **public-t
 
 ## 4. Deploy the Worker
 
+**Fork** this repo (so you get your own Actions + a `wrangler.jsonc` you can edit), then clone your fork:
+
 ```bash
-git clone git@github.com:caseyWebb/groceries-agent.git && cd groceries-agent/worker
+git clone git@github.com:<you>/groceries-agent.git && cd groceries-agent
 
 # KV namespaces (paste each returned id into wrangler.jsonc kv_namespaces):
 npx wrangler kv namespace create KROGER_KV    # Kroger refresh tokens + PKCE verifiers
@@ -72,7 +74,7 @@ npx wrangler kv namespace create TENANT_KV    # allowlist (tenant:<id>) + invite
 npx wrangler kv namespace create OAUTH_KV     # OAuth provider state (required binding name)
 ```
 
-Edit `worker/wrangler.jsonc` `vars` (all non-secret):
+Edit `wrangler.jsonc` `vars` (all non-secret — commit them to your fork):
 
 ```jsonc
 "GITHUB_APP_ID": "<app id>",
@@ -93,15 +95,14 @@ npx wrangler secret put KROGER_CLIENT_SECRET
 rm app-pkcs8.pem          # the key lives in Cloudflare now — don't leave it on disk
 ```
 
-Seed the allowlist + your own invite code in KV:
+On your **fork**, set two Actions secrets (Settings → Secrets and variables → Actions) and enable Actions:
 
-```bash
-# Allowlist your username, and mint an invite code that maps to it:
-npx wrangler kv key put --binding=TENANT_KV --remote "tenant:<username>" '{"id":"<username>"}'
-npx wrangler kv key put --binding=TENANT_KV --remote "invite:<your-code>" "<username>"
-```
+- `CLOUDFLARE_API_TOKEN` — used by the *Deploy Worker*, *Onboard*, and *Revoke* Actions.
+- `GH_APP_PRIVATE_KEY` — the GitHub App PEM (same key as the Worker secret), used by *Onboard*/*Revoke* to write the data repo.
 
-Deploy: push `worker/**` to the code repo (CD, needs a `CLOUDFLARE_API_TOKEN` Actions secret), or `npx wrangler deploy` locally. `wrangler.jsonc` is committed and carries **no secrets** — only the non-secret ids above — so either path works.
+Deploy: push to your fork's `main` (CD via *Deploy Worker*), or run that Action manually. `wrangler.jsonc` is committed to your fork and carries **no secrets** — only the non-secret ids above.
+
+Then onboard *yourself* with the **Onboard member** Action (Actions tab → Onboard member → Run, enter your username) — it allowlists you, mints an invite code (shown in the run summary), and seeds your `users/<username>/` subtree.
 
 ## 5. Cookbook site (optional)
 
@@ -116,20 +117,13 @@ Paste [`AGENT_INSTRUCTIONS.md`](../AGENT_INSTRUCTIONS.md) into your Claude.ai Pr
 
 ## Onboard a friend
 
-A friend needs only a Claude.ai account and a Kroger account — no GitHub, no Kroger Developer app. As operator:
+A friend needs only a Claude.ai account and a Kroger account — no GitHub, no Kroger Developer app, no local tooling on your end.
 
-```bash
-# 1. Create their personal subtree in the data repo (seed from the template stubs):
-#    users/<friend>/{pantry,preferences,stockup,grocery_list,taste,diet_principles,
-#                    cooking_log,meal_plan,feeds}.toml + overlay.toml + notes/
+1. On your fork's **Actions** tab, run **Onboard member** with their `username` (leave `invite_code` blank to auto-generate). It allowlists them, mints the invite code (shown in the run summary), and seeds their `users/<username>/` subtree in the data repo — all in one run.
+2. Hand them the connector URL (`https://<worker-host>/mcp`) + their invite code, and [`AGENT_INSTRUCTIONS.md`](../AGENT_INSTRUCTIONS.md) to paste into their Claude.ai Project.
+3. They connect Claude.ai → enter the invite code at `/authorize` → run their own Kroger consent (`/oauth/init?tenant=<username>`).
 
-# 2. Allowlist them and mint their invite code:
-npx wrangler kv key put --binding=TENANT_KV --remote "tenant:<friend>" '{"id":"<friend>"}'
-npx wrangler kv key put --binding=TENANT_KV --remote "invite:<friend-code>" "<friend>"
-```
-
-3. Hand them the connector URL (`https://<worker-host>/mcp`) + their invite code, and [`AGENT_INSTRUCTIONS.md`](../AGENT_INSTRUCTIONS.md) to paste into their Claude.ai Project.
-4. They connect Claude.ai → enter the invite code at `/authorize` → run their own Kroger consent (`/oauth/init?tenant=<friend>`).
+To remove someone, run **Revoke member** (optionally deleting their `users/<username>/` subtree). They now share the recipe corpus (with their own ratings/notes) and have their own pantry, preferences, and Kroger cart — fully isolated from yours.
 
 They now share the recipe corpus (with their own ratings/notes) and have their own pantry, preferences, and Kroger cart — fully isolated from yours. To remove someone, delete their `tenant:<id>` + `invite:<code>` keys (and, if you like, their `users/<id>/` subtree).
 

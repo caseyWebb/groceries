@@ -3,18 +3,36 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "grocery-agent code repo: the grocery-mcp Worker plus the index/site build tooling that data repos run via reusable CI workflows.",
+  "description": "grocery-agent: the grocery-mcp Cloudflare Worker (MCP server) + the index/site build tooling that data repos run via reusable CI workflows.",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:tooling": "node --test tests/build-indexes.test.mjs tests/build-site.test.mjs",
     "build:indexes": "node scripts/build-indexes.mjs",
-    "build:site": "node scripts/build-site.mjs",
-    "test": "node --test"
+    "build:site": "node scripts/build-site.mjs"
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "^0.7.2",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "agents": "^0.15.0",
+    "fast-xml-parser": "^5.8.0",
     "gray-matter": "^4.0.3",
+    "jose": "^6.2.3",
+    "js-yaml": "^4.1.0",
     "marked": "^16.4.2",
-    "smol-toml": "^1.3.1"
+    "smol-toml": "^1.3.1",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250601.0",
+    "@types/js-yaml": "^4.0.9",
+    "typescript": "^5.6.0",
+    "vitest": "^3.2.6",
+    "wrangler": "^4.98.0"
   }
 }

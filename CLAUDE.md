@@ -8,9 +8,9 @@ This file is for Claude Code (and humans) **working on** the grocery-agent backe
 
 A personal grocery agent that runs in **Claude.ai** (not Claude Code). This is the **code-only** repo — the agent's backend and build tooling. **The agent's data lives in a separate private data repo** (the multi-tenant split — see [`docs/SELF_HOSTING.md`](docs/SELF_HOSTING.md) and the `multi-tenant-friend-group` OpenSpec change). This repo holds:
 
-- **`worker/`** — a Cloudflare Worker (TypeScript) exposing the `grocery-mcp` MCP server. The domain tool surface (pantry, recipes, Kroger, substitutions, cart). Deployed to `grocery-mcp.<subdomain>.workers.dev`. It reads/writes the data repo via a GitHub App installation token; "which tenant" is a `users/<username>/` path prefix in that repo.
+- **`src/` + `test/` + `wrangler.jsonc`** — the repo root **is** the Cloudflare Worker (TypeScript) exposing the `grocery-mcp` MCP server: the domain tool surface (pantry, recipes, Kroger, substitutions, cart), deployed to `grocery-mcp.<subdomain>.workers.dev`. It reads/writes the data repo via a GitHub App installation token; "which tenant" is a `users/<username>/` path prefix in that repo. The Worker is also an OAuth 2.1 provider — members connect Claude.ai via an operator-issued invite code (`src/authorize.ts`).
 - **`scripts/`** — index + static-site build tooling (`build-indexes.mjs`, `build-site.mjs`, `site-assets/`). Data repos run these against their own content via the reusable CI workflows in `.github/workflows/data-build-*.yml` (`--root <dir>`).
-- **`docs/`** — `PROJECT.md` (architecture), `SCHEMAS.md` (file formats), `TOOLS.md` (the tool contract — keep in sync with `worker/` code), `SELF_HOSTING.md` (operator setup).
+- **`docs/`** — `PROJECT.md` (architecture), `SCHEMAS.md` (file formats), `TOOLS.md` (the tool contract — keep in sync with the `src/` code), `SELF_HOSTING.md` (operator setup).
 - **`openspec/`** — the change/spec workflow (see below).
 - **`ROADMAP.md`** — the sequence of OpenSpec changes building the system.
 
@@ -34,21 +34,21 @@ The data repo is freely mutable; the Kroger cart is append-only. Capture intent 
 
 Build tooling is managed with **mise** (`mise.toml`) — Node, etc. Don't install globally.
 
-## Working on the Worker (`worker/`)
+## Working on the Worker (`src/`)
 
-The Worker has its own dependency tree, separate from the root index/site tooling.
+The Worker is the root package. One `package.json` carries both the Worker deps and the `scripts/` build-tooling deps; `npm test` runs the Worker (vitest), `npm run test:tooling` runs the `scripts/` tests (`node --test`).
 
 ```bash
-cd worker
-npm run dev        # wrangler dev — local Worker; point MCP Inspector at the local URL
-npm test           # vitest run — unit tests (worker/test/*.test.ts)
-npm run typecheck  # tsc --noEmit
-npm run deploy      # wrangler deploy — normally NOT run by hand (see below)
+npm run dev          # wrangler dev — local Worker; point MCP Inspector at the local URL
+npm test             # vitest run — Worker unit tests (test/*.test.ts)
+npm run test:tooling # node --test — build-indexes/build-site tests (tests/*.test.mjs)
+npm run typecheck    # tsc --noEmit
+npm run deploy       # wrangler deploy — normally NOT run by hand (see below)
 ```
 
-- **Deployment is CD**: pushing to `worker/**` triggers `.github/workflows/deploy-worker.yml` (runs `typecheck` + `test`, then `wrangler deploy`). Repo access is via a **GitHub App** (D3), not a PAT: the App private key is a Cloudflare secret (`wrangler secret put GITHUB_APP_PRIVATE_KEY`); the App id, installation id, and data-repo coords are non-secret `wrangler.jsonc` vars. Kroger creds + KV are likewise secret-put / bound to Cloudflare — never in the repo or in Actions.
-- **Local dev/secrets**: `GITHUB_APP_PRIVATE_KEY` + Kroger creds live in `worker/.dev.vars` for local runs (gitignored; see `worker/.dev.vars.example`). See `docs/SELF_HOSTING.md` for the one-time operator setup and the Kroger `/oauth/init?tenant=<id>` flow.
-- **Structured errors, not throws**: tools return `{ error: "...", message }` shapes the agent can reason over. Follow the existing convention in `worker/src/errors.ts`.
+- **Deployment is CD**: pushing to `src/**` (or `wrangler.jsonc`/`package.json`) triggers `.github/workflows/deploy-worker.yml` (runs `typecheck` + `test`, then `wrangler deploy`). Repo access is via a **GitHub App** (D3), not a PAT: the App private key is a Cloudflare secret (`wrangler secret put GITHUB_APP_PRIVATE_KEY`); the App id, installation id, and data-repo coords are non-secret `wrangler.jsonc` vars. Kroger creds + KV are likewise secret-put / bound to Cloudflare — never in the repo or in Actions.
+- **Local dev/secrets**: `GITHUB_APP_PRIVATE_KEY` + Kroger creds live in `.dev.vars` for local runs (gitignored; see `.dev.vars.example`). See `docs/SELF_HOSTING.md` for the one-time operator setup and the Kroger `/oauth/init?tenant=<id>` flow.
+- **Structured errors, not throws**: tools return `{ error: "...", message }` shapes the agent can reason over. Follow the existing convention in `src/errors.ts`.
 - **`docs/TOOLS.md` is the contract** — when a tool's params/returns change, update `docs/TOOLS.md` in the same pass. No drift.
 
 ## Working on data tooling (root)
@@ -64,7 +64,7 @@ npm test                                                   # node --test (root t
 
 - **Validation** runs in `build-indexes.mjs` (TOML parses, frontmatter well-formed, references resolve, status enum *optional* now — it's per-tenant overlay). The Worker reimplements a *structural* subset in TS for write-time validation (it can't run the Node validator on `workerd`).
 - **No git hooks** in this repo anymore (data moved out). The Worker's CI (`deploy-worker.yml`) runs `typecheck` + `test` before deploying.
-- **Actions**: `deploy-worker.yml` deploys the Worker on push to `worker/**`. `data-build-indexes.yml` + `data-build-site.yml` are **reusable** (`on: workflow_call`) — a data repo's thin caller workflows invoke them (`uses: caseyWebb/groceries-agent/...@main`) to build its own indexes/site, billed to the data-repo owner. Tests/fixtures live in `tests/`.
+- **Actions**: `deploy-worker.yml` deploys the Worker on push to `src/**`. `data-build-indexes.yml` + `data-build-site.yml` are **reusable** (`on: workflow_call`) — a data repo's thin caller workflows invoke them (`uses: caseyWebb/groceries-agent/...@main`) to build its own indexes/site, billed to the data-repo owner. `onboard.yml`/`revoke.yml` are operator-run (`workflow_dispatch`) provisioning workflows. Tests/fixtures live in `tests/`.
 
 ## OpenSpec change workflow
 
@@ -84,4 +84,4 @@ openspec validate "<name>"          # validate artifacts
 
 - Match the surrounding code's idiom, naming, and comment density.
 - Config/structured files use TOML; prose files (recipes, taste, diet_principles, the instruction docs) stay markdown; recipe frontmatter is YAML (Obsidian renders it).
-- Don't commit secrets. The repo is public — anything needed to run that's gitignored gets documented in `worker/README.md`.
+- Don't commit secrets. The repo is public — anything needed to run that's gitignored gets documented in `README.md` / `.dev.vars.example`.
