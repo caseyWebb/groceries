@@ -14,16 +14,13 @@
       "green pepper",
       "worcestershire sauce"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [],
     "servings": 10,
     "slug": "american-chop-suey",
     "source": "https://www.seriouseats.com/johnny-marzetti-beefaroni-hamburger-helper-goulash-italian-american-recipe",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "american",
@@ -55,16 +52,13 @@
       "bell peppers",
       "red wine"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "american-goulash",
     "source": "https://www.budgetbytes.com/goulash/",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "pastas",
@@ -98,16 +92,13 @@
       "fish sauce",
       "scallions"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "arroz-caldo",
     "source": "https://www.seriouseats.com/arroz-caldo-chicken-rice-soup-recipe",
-    "status": "active",
     "style": "soup",
     "tags": [
       "filipino",
@@ -141,11 +132,9 @@
       "tomato paste",
       "peas"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -153,7 +142,6 @@
     "servings": 6,
     "slug": "beef-stew",
     "source": "https://www.seriouseats.com/all-american-beef-stew-recipe",
-    "status": "active",
     "style": "stew",
     "tags": [
       "american",
@@ -186,16 +174,13 @@
       "whole peeled tomatoes",
       "pappardelle"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "mixed",
-    "rating": null,
     "season": [],
     "servings": 10,
     "slug": "bolognese-sauce",
     "source": "https://www.seriouseats.com/the-best-slow-cooked-bolognese-sauce-recipe",
-    "status": "active",
     "style": "braise",
     "tags": [
       "italian",
@@ -229,16 +214,13 @@
       "dijon mustard",
       "bay leaf"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "pork",
-    "rating": null,
     "season": [],
     "servings": 10,
     "slug": "boston-baked-beans",
     "source": "https://www.seriouseats.com/boston-baked-beans-recipe",
-    "status": "active",
     "style": "baked",
     "tags": [
       "american",
@@ -272,16 +254,13 @@
       "heavy cream",
       "butter"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "butter-chicken",
     "source": "https://www.seriouseats.com/stovetop-butter-chicken",
-    "status": "active",
     "style": "braise",
     "tags": [
       "indian",
@@ -317,16 +296,13 @@
       "green chiles",
       "cilantro"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "channa-masala",
     "source": "https://www.seriouseats.com/channa-masala-recipe",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "vegetarian",
@@ -357,16 +333,13 @@
       "garlic",
       "bay leaves"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "chicken-adobo",
     "source": "https://www.foodnetwork.com/recipes/food-network-kitchen/instant-pot-chicken-adobo-3649636",
-    "status": "active",
     "style": "braise",
     "tags": [
       "easy-dinners",
@@ -394,16 +367,13 @@
       "green chiles",
       "cumin"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "mixed",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "chicken-and-black-bean-stew",
     "source": "https://www.seriouseats.com/quick-and-easy-pressure-cooker-chicken-black-bean-stew-recipe",
-    "status": "active",
     "style": "stew",
     "tags": [
       "pressure-cooker",
@@ -431,11 +401,9 @@
       "evaporated milk",
       "sour cream"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -443,7 +411,6 @@
     "servings": 6,
     "slug": "chicken-and-dumplings",
     "source": null,
-    "status": "active",
     "style": "soup",
     "tags": [
       "comfort-foods",
@@ -473,16 +440,13 @@
       "paprika",
       "vegetable broth"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "chicken-and-rice",
     "source": "https://www.budgetbytes.com/one-pot-chicken-and-rice/",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "easy-dinners",
@@ -512,16 +476,13 @@
       "white onion",
       "cilantro"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": 5,
     "season": [],
     "servings": 6,
     "slug": "chicken-chile-verde",
     "source": "https://www.seriouseats.com/pressure-cooker-fast-and-easy-chicken-chile-verde-recipe",
-    "status": "active",
     "style": "pressure-cooker",
     "tags": [
       "pressure-cooker",
@@ -550,16 +511,13 @@
       "pistachios",
       "onions"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "chicken-tagine",
     "source": "https://www.seriouseats.com/chicken-and-dried-fig-tagine-with-pistachios-and-chickpeas",
-    "status": "active",
     "style": "braise",
     "tags": [
       "braise",
@@ -588,16 +546,13 @@
       "shallots",
       "parsley"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "pork",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "chorizo-and-potato-frittata",
     "source": "https://www.jamieoliver.com/recipes/eggs/potato-and-chorizo-omelette-with-a-kinda-parsley-salad/",
-    "status": "active",
     "style": "baked",
     "tags": [
       "baked",
@@ -627,16 +582,13 @@
       "goat cheese",
       "bacon"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "fish",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "cobb-salad",
     "source": null,
-    "status": "active",
     "style": "salad",
     "tags": [
       "lunch",
@@ -667,18 +619,15 @@
       "pecorino",
       "thyme"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": 5,
     "season": [
       "summer"
     ],
     "servings": 6,
     "slug": "corn-risotto",
     "source": "https://www.seriouseats.com/pressure-cooker-corn-risotto",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "italian",
@@ -708,16 +657,13 @@
       "cajun seasoning",
       "onion"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "creamy-cajun-chicken-pasta",
     "source": "https://www.budgetbytes.com/one-pot-creamy-cajun-chicken-pasta/",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "pastas",
@@ -747,16 +693,13 @@
       "parmesan",
       "spinach"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "creamy-pesto-chicken-pasta",
     "source": "https://www.budgetbytes.com/one-pot-creamy-pesto-chicken-pasta/",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "pastas",
@@ -786,16 +729,13 @@
       "panko",
       "rotini"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "pork",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "crispy-baked-pasta",
     "source": "https://www.seriouseats.com/cast-iron-cooking-crispy-baked-pasta-mushrooms-sausage-parmesan-cream-sauce-recipe",
-    "status": "active",
     "style": "baked",
     "tags": [
       "pastas",
@@ -827,16 +767,13 @@
       "eggs",
       "vanilla"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 10,
     "slug": "double-caramel-flan",
     "source": "https://www.seriouseats.com/double-caramel-flan-recipe",
-    "status": "active",
     "style": "baked",
     "tags": [
       "dessert",
@@ -866,16 +803,13 @@
       "butter",
       "whole milk"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 20,
     "slug": "drop-biscuits",
     "source": "https://www.seriouseats.com/quick-easy-drop-biscuits-recipe",
-    "status": "active",
     "style": "baked",
     "tags": [
       "american",
@@ -907,16 +841,13 @@
       "lemon",
       "parsley"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "egg-salad-sandwich",
     "source": "https://www.seriouseats.com/the-best-egg-salad-recipe",
-    "status": "active",
     "style": "salad",
     "tags": [
       "lunch",
@@ -946,16 +877,13 @@
       "beef broth",
       "creole seasoning"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "filthier-cabbage",
     "source": null,
-    "status": "active",
     "style": "braise",
     "tags": [
       "cajun",
@@ -984,18 +912,15 @@
       "eggs",
       "egg yolks"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [
       "fresh-pasta"
     ],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "fresh-pasta",
     "source": "https://www.seriouseats.com/fresh-egg-pasta",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "pastas",
@@ -1025,16 +950,13 @@
       "scallion",
       "soy sauce"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 3,
     "slug": "fried-rice",
     "source": "https://www.seriouseats.com/easy-vegetable-fried-rice-recipe",
-    "status": "active",
     "style": "stir-fry",
     "tags": [
       "easy-dinners",
@@ -1066,16 +988,13 @@
       "onion",
       "chicken stock"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "pork",
-    "rating": null,
     "season": [],
     "servings": 12,
     "slug": "frijoles-charros",
     "source": "https://www.seriouseats.com/frijoles-charros-mexican-pinto-beans-bacon-recipe",
-    "status": "active",
     "style": "stew",
     "tags": [
       "mexican",
@@ -1107,16 +1026,13 @@
       "onion",
       "chicken stock"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 8,
     "slug": "galinhada-mineira",
     "source": "https://www.seriouseats.com/galinhada-mineira-brazilian-chicken-and-rice-from-minas-gerais-recipe-7229603",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "brazilian",
@@ -1145,11 +1061,9 @@
       "corn",
       "ginger"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -1157,7 +1071,6 @@
     "servings": 4,
     "slug": "gochujang-white-chicken-chili",
     "source": null,
-    "status": "active",
     "style": "soup",
     "tags": [
       "korean",
@@ -1200,7 +1113,6 @@
     "servings": 6,
     "slug": "grilled-lemongrass-chicken-thighs",
     "source": "https://www.bonappetit.com/recipe/grilled-lemongrass-chicken-thighs",
-    "status": "draft",
     "style": "grilled",
     "tags": [
       "vietnamese",
@@ -1228,16 +1140,13 @@
       "honey",
       "mayonnaise"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "fish",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "honey-mustard-salmon",
     "source": null,
-    "status": "active",
     "style": "baked",
     "tags": [
       "seafood",
@@ -1270,11 +1179,9 @@
       "olive oil",
       "red pepper flakes"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -1282,7 +1189,6 @@
     "servings": 6,
     "slug": "italian-beans-and-greens-soup",
     "source": null,
-    "status": "active",
     "style": "soup",
     "tags": [
       "italian",
@@ -1312,16 +1218,13 @@
       "butter",
       "milk"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "mixed",
-    "rating": null,
     "season": [],
     "servings": 8,
     "slug": "lasagna-bolognese",
     "source": "https://www.seriouseats.com/lasagna-bolognese-al-forno-recipe",
-    "status": "active",
     "style": "baked",
     "tags": [
       "italian",
@@ -1355,16 +1258,13 @@
       "mozzarella",
       "parmesan"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "mixed",
-    "rating": null,
     "season": [],
     "servings": 8,
     "slug": "meat-lasagna",
     "source": "https://www.seriouseats.com/no-holds-barred-lasagna-bolognese-pasta-italian-homemade-ricotta",
-    "status": "active",
     "style": "baked",
     "tags": [
       "italian",
@@ -1396,16 +1296,13 @@
       "cheddar",
       "anchovies"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "mixed",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "meatloaf",
     "source": "https://www.seriouseats.com/the-food-lab-all-american-meatloaf-excerpt-recipe",
-    "status": "active",
     "style": "baked",
     "tags": [
       "american",
@@ -1436,16 +1333,13 @@
       "tomatoes",
       "pasta"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "minestrone-soup",
     "source": "https://www.seriouseats.com/the-best-minestrone-soup-recipe",
-    "status": "active",
     "style": "soup",
     "tags": [
       "pastas",
@@ -1476,16 +1370,13 @@
       "white miso",
       "red miso"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "fish",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "miso-soup",
     "source": "https://www.seriouseats.com/rustic-miso-soup-tofu-seaweed-recipe",
-    "status": "active",
     "style": "soup",
     "tags": [
       "japanese",
@@ -1515,16 +1406,13 @@
       "buttermilk",
       "garlic"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "mississippi-pot-roast",
     "source": "https://www.seriouseats.com/mississippi-pot-roast-recipe-8774586",
-    "status": "active",
     "style": "braise",
     "tags": [
       "american",
@@ -1564,7 +1452,6 @@
     "servings": 6,
     "slug": "moo-shu-pork",
     "source": "https://thewoksoflife.com/moo-shu-pork-recipe",
-    "status": "draft",
     "style": "stir-fry",
     "tags": [
       "chinese-american",
@@ -1594,16 +1481,13 @@
       "egg",
       "saffron"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "moroccan-egg-drop-harira",
     "source": "https://www.seriouseats.com/moroccan-egg-drop-harira-recipe-7109917",
-    "status": "active",
     "style": "soup",
     "tags": [
       "moroccan",
@@ -1632,16 +1516,13 @@
       "parmigiano-reggiano",
       "white wine"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "mushroom-and-sun-dried-tomato-farotto",
     "source": "https://www.seriouseats.com/mushroom-sundried-tomato-farrotto-recipe-8772336",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "vegetarian",
@@ -1670,16 +1551,13 @@
       "penne",
       "onion"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "pork",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "pasta-alla-norcina",
     "source": "https://www.seriouseats.com/pasta-alla-norcina-creamy-pasta-with-sausage",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "pastas",
@@ -1708,16 +1586,13 @@
       "lemon",
       "parsley"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "fish",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "pasta-burro-e-alici",
     "source": "https://www.seriouseats.com/pasta-burro-e-alici-pasta-with-creamy-anchovy-butter-sauce-recipe-11859455",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "pastas",
@@ -1746,11 +1621,9 @@
       "mirepoix",
       "parmesan"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "pork",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -1758,7 +1631,6 @@
     "servings": 6,
     "slug": "pasta-e-fagioli",
     "source": "https://www.budgetbytes.com/pasta-e-fagioli/",
-    "status": "active",
     "style": "soup",
     "tags": [
       "italian",
@@ -1791,11 +1663,9 @@
       "rosemary",
       "olive oil"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -1803,7 +1673,6 @@
     "servings": 8,
     "slug": "pasta-e-fagioli-tuscan",
     "source": "https://www.seriouseats.com/pasta-e-fagioli-italian-bean-pasta-soup-recipe",
-    "status": "active",
     "style": "soup",
     "tags": [
       "italian",
@@ -1831,16 +1700,13 @@
       "penne",
       "feta"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "pork",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "pasta-with-sausage-and-peppers",
     "source": "https://www.budgetbytes.com/pasta-with-sausage-and-peppers/",
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "pastas",
@@ -1873,16 +1739,13 @@
       "carrots",
       "chicken stock"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "pollo-guisado",
     "source": null,
-    "status": "active",
     "style": "stew",
     "tags": [
       "mexican",
@@ -1912,16 +1775,13 @@
       "cashews",
       "heavy cream"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "pressure-cooker-butter-chicken",
     "source": "https://www.seriouseats.com/pressure-cooker-butter-chicken",
-    "status": "active",
     "style": "pressure-cooker",
     "tags": [
       "indian",
@@ -1953,18 +1813,15 @@
       "marinara",
       "mozzarella"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [
       "summer"
     ],
     "servings": 8,
     "slug": "ratatouille",
     "source": "https://www.budgetbytes.com/oven-roasted-ratatouille/",
-    "status": "active",
     "style": "baked",
     "tags": [
       "french",
@@ -1992,16 +1849,13 @@
       "swiss cheese",
       "russian dressing"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "reuben-sandwiches",
     "source": "https://www.seriouseats.com/reuben-sandwich-corned-beef-rye-recipe",
-    "status": "active",
     "style": "griddle",
     "tags": [
       "lunch",
@@ -2033,11 +1887,9 @@
       "mint",
       "shallots"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "fish",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -2045,7 +1897,6 @@
     "servings": 4,
     "slug": "sheet-pan-salmon-and-kale",
     "source": null,
-    "status": "active",
     "style": "sheet-pan",
     "tags": [
       "salmon",
@@ -2078,16 +1929,13 @@
       "turmeric",
       "basmati rice"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "shellfish",
-    "rating": null,
     "season": [],
     "servings": 2,
     "slug": "shrimp-with-cilantro-sauce",
     "source": null,
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "shrimp",
@@ -2115,16 +1963,13 @@
       "onion",
       "brown sugar"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "sloppy-joes",
     "source": null,
-    "status": "active",
     "style": "one-pot",
     "tags": [
       "comfort-foods",
@@ -2153,16 +1998,13 @@
       "egg yolks",
       "eggs"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "spinach-fresh-pasta",
     "source": null,
-    "status": "active",
     "style": "fresh-pasta",
     "tags": [
       "vegetarian",
@@ -2192,16 +2034,13 @@
       "parmesan",
       "vegetable broth"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "spinach-tortellini-soup",
     "source": null,
-    "status": "active",
     "style": "soup",
     "tags": [
       "vegetarian",
@@ -2231,11 +2070,9 @@
       "butter",
       "sage"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -2243,7 +2080,6 @@
     "servings": 4,
     "slug": "sweet-potato-gnocchi",
     "source": null,
-    "status": "active",
     "style": "fresh-pasta",
     "tags": [
       "vegetarian",
@@ -2272,11 +2108,9 @@
       "tomato paste",
       "beef stock"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -2284,7 +2118,6 @@
     "servings": 6,
     "slug": "swiss-steak",
     "source": null,
-    "status": "active",
     "style": "braise",
     "tags": [
       "beef",
@@ -2313,11 +2146,9 @@
       "corn",
       "whole milk"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -2325,7 +2156,6 @@
     "servings": 6,
     "slug": "tater-tot-casserole",
     "source": null,
-    "status": "active",
     "style": "baked",
     "tags": [
       "beef",
@@ -2357,16 +2187,13 @@
       "heavy cream",
       "parmesan"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "tomato-tortellini-soup",
     "source": null,
-    "status": "active",
     "style": "soup",
     "tags": [
       "vegetarian",
@@ -2395,16 +2222,13 @@
       "heavy cream",
       "potato chips"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "fish",
-    "rating": null,
     "season": [],
     "servings": 8,
     "slug": "tuna-casserole",
     "source": "https://www.bonappetit.com/recipe/tuna-casserole",
-    "status": "active",
     "style": "baked",
     "tags": [
       "fish",
@@ -2433,16 +2257,13 @@
       "carrot",
       "egg"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "turkey-meatloaf",
     "source": "http://www.gourmet.com.s3-website-us-east-1.amazonaws.com/recipes/2000s/2003/01/turkey-meatloaf.html",
-    "status": "active",
     "style": "baked",
     "tags": [
       "turkey",
@@ -2473,11 +2294,9 @@
       "carrot",
       "celery"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -2485,7 +2304,6 @@
     "servings": 8,
     "slug": "tuscan-white-bean-soup",
     "source": "https://www.seriouseats.com/30-minute-tuscan-white-bean-soup-recipe",
-    "status": "active",
     "style": "soup",
     "tags": [
       "vegetarian",
@@ -2514,16 +2332,13 @@
       "pancetta",
       "butter"
     ],
-    "last_cooked": null,
     "meal_preppable": false,
     "produces_components": [],
     "protein": "vegetarian",
-    "rating": null,
     "season": [],
     "servings": 4,
     "slug": "uovo-in-raviolo",
     "source": "https://www.seriouseats.com/uovo-in-raviolo-runny-egg-yolk-ravioli-ricotta-recipe",
-    "status": "active",
     "style": "pasta",
     "tags": [
       "pastas",
@@ -2556,16 +2371,13 @@
       "white onion",
       "cumin"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "beef",
-    "rating": null,
     "season": [],
     "servings": 6,
     "slug": "vaca-frita",
     "source": null,
-    "status": "active",
     "style": "braise",
     "tags": [
       "beef",
@@ -2596,11 +2408,9 @@
       "pepper jack",
       "lime"
     ],
-    "last_cooked": null,
     "meal_preppable": true,
     "produces_components": [],
     "protein": "chicken",
-    "rating": null,
     "season": [
       "fall",
       "winter"
@@ -2608,7 +2418,6 @@
     "servings": 8,
     "slug": "white-chicken-chili",
     "source": "https://www.seriouseats.com/white-chili-with-chicken-best",
-    "status": "active",
     "style": "stew",
     "tags": [
       "comfort-foods",
