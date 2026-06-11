@@ -11,7 +11,7 @@
 // conflict means the tree advanced on unrelated files, and overlaying our full
 // contents on the new base_tree preserves both.
 
-import { GitHubError, type GitHubClient, type TreeFile } from "./github.js";
+import { GitHubError, isDeletion, type GitHubClient, type TreeChange } from "./github.js";
 import { ToolError } from "./errors.js";
 import { validateFile } from "./validate.js";
 
@@ -23,20 +23,21 @@ export interface CommitResult {
 }
 
 /**
- * Validate and commit `files` (each carrying its full new content) as one commit.
- * Throws ToolError("validation_failed") if any entry is structurally invalid (no
- * commit), ToolError("conflict") if the ref keeps advancing past the retry bound,
- * or ToolError("upstream_unavailable") on other GitHub failures.
+ * Validate and commit `files` (full-content writes and/or deletions) as one
+ * commit. Throws ToolError("validation_failed") if any content entry is
+ * structurally invalid (no commit), ToolError("conflict") if the ref keeps
+ * advancing past the retry bound, or ToolError("upstream_unavailable") on other
+ * GitHub failures. Deletions carry no content and skip structural validation.
  */
 export async function commitFiles(
   gh: GitHubClient,
-  files: TreeFile[],
+  files: TreeChange[],
   message: string,
 ): Promise<CommitResult> {
   if (files.length === 0) {
     throw new ToolError("validation_failed", "commit requested with no file changes");
   }
-  for (const f of files) validateFile(f.path, f.content);
+  for (const f of files) if (!isDeletion(f)) validateFile(f.path, f.content);
 
   for (let attempt = 1; attempt <= MAX_REF_RETRIES; attempt++) {
     const baseCommit = await gh.getRef();

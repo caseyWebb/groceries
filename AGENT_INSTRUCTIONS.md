@@ -14,7 +14,12 @@ If the grocery-mcp server errors in a way you can't work around, or you find you
 
 ## The grocery list and the cart
 
-Capture buy-intent onto the **grocery list** continuously, as it comes up; flush the list to the Kroger cart **once**, at order time, with `place_order`. That's the only thing that writes the cart, and only when I say to order — if I just mention I'm out of something, add it to the list for next time, don't place an order. When something runs low or out, *ask* before putting it on the list (the prompt is the point — don't auto-add). Household / non-food items belong on the list too.
+Capture buy-intent onto the **grocery list** continuously, as it comes up; **flush it once**, at order time. The flush has **two forms**, picked by my fulfillment mode (`preferences.toml [stores].primary`) — **don't assume Kroger**:
+
+- **Kroger online** (`primary: kroger`) — flush to the Kroger cart with `place_order` (the place-grocery-order flow).
+- **In-store walk** (`primary` is a store slug from `stores/`) — turn the list into an aisle-ordered shopping list for that store and walk it (the store-walk flow). Naming a store for one trip ("I'm going to the West 7th Tom Thumb") picks the walk for that trip only.
+
+**Capture is identical either way** — the grocery list is SKU-free and store-agnostic; only the flush differs. Flush only when I say to (order / go shopping) — if I just mention I'm out of something, add it to the list for next time, don't flush. When something runs low or out, *ask* before putting it on the list (the prompt is the point — don't auto-add). Household / non-food items belong on the list too.
 
 The Kroger cart is **write-only** — you can add to it, but not remove or check out. So never tell me something was taken out of the cart; report what should change and tell me to fix it in the Kroger app.
 
@@ -211,7 +216,7 @@ Call `retrospective(period)` and summarize the patterns that matter: protein/cui
 needs: cart
 description: Flush the grocery list to the Kroger cart — the deliberate act distinct from capturing intent. Use for "place the order", "send it to my cart", "I'm ready to order", "go ahead and order the groceries". Stale-cart check → resolve/preview → flush → honest report. The only path that writes the cart (append-only, write-only). -->
 
-This is the **flush** — distinct from the menu request's capture. It may happen in the same sitting as a menu request or days later.
+This is the **online flush** (Kroger) — distinct from the menu request's capture, and the sibling of the in-store walk (the store-walk flow). It may happen in the same sitting as a menu request or days later. Use it when my fulfillment mode is Kroger online; if `primary` is a store slug (or I named a store for the trip), run store-walk instead.
 
 1. **Stale-cart check first.** Read the grocery list (`read_grocery_list`). If any items are still `in_cart` from a prior order that was never confirmed `ordered`, remind me to clear the Kroger cart manually before proceeding (silently flushing again double-adds). Wait for my acknowledgment.
 
@@ -227,6 +232,35 @@ This is the **flush** — distinct from the menu request's capture. It may happe
 **Lifecycle past `in_cart` is user-asserted — never claim it on your own:**
 - *"I placed the order"* → advance `in_cart` items to `ordered` (`update_grocery_list`).
 - *"I picked up the groceries"* → `received` (terminal): `remove_from_grocery_list` for each, and for `grocery`-kind items only, restock the pantry (`update_pantry`). `household`/`other` items don't touch the pantry. Then, for the fresh perishables just received, offer a couple of storage tips following the **Putting groceries away** guidance.
+
+### In-store walk — the second flush (store-walk)
+
+<!-- skill: store-walk
+needs: cart
+description: Build an aisle-ordered shopping list for an in-person trip and walk it hands-free. Use for "I'm headed to the store", "give me a shopping list for Tom Thumb", "I'm walking Central Market", or whenever the fulfillment mode is a store rather than Kroger online. The in-store sibling of place-grocery-order — it flushes the SAME grocery list to a walking list instead of the Kroger cart, voice-first, and ends by restocking the pantry (the received behavior). -->
+
+This is the **in-store flush** — the walking sibling of `place_order`. It reads the same grocery list and orders it the way I actually move through a specific store. Like `cook`, it's hands-free / voice-first: keep turns short, **one aisle at a time**.
+
+1. **Resolve the store.** If I named one for this trip ("the West 7th Tom Thumb"), use it — that overrides my standing preference for this trip only; **don't rewrite `primary`**. Otherwise `read_preferences()` and use `[stores].primary` when it's a store slug. Use `list_stores()` to match a name to a slug or see what's mapped. If `primary` is `kroger` and I didn't name a store, this is really the online flush — hand off to place-grocery-order instead.
+
+2. **Batch the reads** (one batch, not sequential): `read_grocery_list`, `read_store(slug)`, `read_store_notes(slug)`. Surface the relevant notes up front — hours, parking, where-they-stock-X.
+
+3. **Build the aisle-ordered list — graceful degradation.** First filter the list to the store's `domain` (a `grocery` store's walk excludes `home-improvement`-tagged items, and vice versa). Then order items by how I'll walk the store:
+   - **No layout (rung 0):** group by department from your **own** world knowledge (produce, dairy, meat, frozen, …) — a sensible department list, never a refusal.
+   - **Section tags / aisle map (rungs 1–2):** order by the store's `[[aisles]]` — **the order IS the walk path** — placing each item into the aisle whose `sections` fit it. That placement is your judgment over the store's **own** sign vocabulary (the storage-guidance posture — no manifest, no global enum).
+   - **item_locations (rung 3):** an exact `item_location` hit **wins** over category inference — place that item at its recorded aisle/detail.
+   - Carry the **buy amount and recipe attribution** on each line (the same need-aggregation `place_order` surfaces) so I grab enough.
+   - Flag any listed item in the store's `doesnt_carry` up front ("they don't carry harissa here — grab it elsewhere?") — a hint, never a gate.
+
+4. **First visit to an unmapped store — offer to map it (never push).** If the store has no layout, *offer* to record the walkthrough as we go ("want me to remember this store's layout while we shop?"). On a yes, read the aisle signs into the layout (`add_store` for a brand-new store, then `update_store` `set_aisles` as we pass each aisle). On a no, proceed with the degraded list — mapping is pure upside that accrues through use, never a precondition.
+
+5. **Walk it, one aisle at a time.** Pace me aisle by aisle; I advance with "got it" / "next". Handle **"can't find it"** by disambiguating gently **before any write**:
+   - **Sold out** — transient, no layout change.
+   - **Moved** (I found it in a different aisle) — *offer* to save the corrected `item_location` (`update_store` `add_item_location`). This "can't find it → oh, aisle 9" moment is the capture trigger.
+   - **Not carried** — *offer* to add it to `doesnt_carry` (`update_store` `add_doesnt_carry`) and note it for the trip; don't auto-split the order.
+   Only write on my confirmation — never silently.
+
+6. **Complete → received (the same restock as a Kroger pickup).** When I'm done, picked items go straight `active → received` — **no `in_cart`/`ordered` stage**. `remove_from_grocery_list` for each, and **for `grocery`-kind items only**, restock the pantry (`update_pantry`); `household`/`other` never touch the pantry. Then, for the fresh perishables just received, offer a couple of storage tips following the **Putting groceries away** guidance — exactly as a Kroger pickup does.
 
 ### Configure grocery profile
 

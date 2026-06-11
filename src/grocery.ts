@@ -15,6 +15,13 @@ export interface GroceryItem {
   name: string;
   quantity: string;
   kind: GroceryKind;
+  /**
+   * The kind of STORE this is bought at — a free string, default "grocery"
+   * (common values grocery | home-improvement | garden | pharmacy). Orthogonal to
+   * `kind`: `kind` governs pantry reconcile on receive; `domain` governs which
+   * store-type an in-store walk includes the item in.
+   */
+  domain: string;
   status: GroceryStatus;
   source: GrocerySource;
   for_recipes: string[];
@@ -28,6 +35,7 @@ export interface GroceryAddInput {
   name: string;
   quantity?: string;
   kind?: GroceryKind;
+  domain?: string;
   source?: GrocerySource;
   for_recipes?: string[];
   note?: string | null;
@@ -37,6 +45,7 @@ export interface GroceryAddInput {
 export interface GroceryUpdateInput {
   quantity?: string;
   kind?: GroceryKind;
+  domain?: string;
   status?: GroceryStatus;
   source?: GrocerySource;
   for_recipes?: string[];
@@ -80,6 +89,7 @@ export function addToGroceryList(
       ...existing,
       quantity: input.quantity ?? existing.quantity,
       kind: input.kind ?? existing.kind,
+      domain: input.domain ?? existing.domain,
       source: input.source ?? existing.source,
       for_recipes: uniq([...existing.for_recipes, ...(input.for_recipes ?? [])]),
       note: input.note !== undefined ? input.note : existing.note,
@@ -92,6 +102,7 @@ export function addToGroceryList(
     name: input.name.trim(),
     quantity: input.quantity ?? "1",
     kind: input.kind ?? "grocery",
+    domain: input.domain ?? "grocery",
     status: "active",
     source: input.source ?? "ad_hoc",
     for_recipes: uniq(input.for_recipes ?? []),

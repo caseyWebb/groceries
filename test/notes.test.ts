@@ -3,8 +3,11 @@ import {
   parseNotes,
   appendNote,
   serializeNotes,
+  serializeStoreNotes,
   notesPath,
+  storeNotesPath,
   aggregateGroupSignal,
+  aggregateNotes,
   type Note,
   type TenantSignal,
 } from "../src/notes.js";
@@ -103,5 +106,44 @@ describe("aggregateGroupSignal (§8.2)", () => {
   it("omits a tenant with no rating from the ratings list", () => {
     const signal = aggregateGroupSignal("x", [{ author: "z", notes: [note()] }]);
     expect(signal.ratings).toEqual([]);
+  });
+});
+
+describe("store notes (in-store-fulfillment D6)", () => {
+  it("storeNotesPath is the per-store file under the tenant prefix", () => {
+    expect(storeNotesPath("west-7th-tom-thumb")).toBe("store_notes/west-7th-tom-thumb.toml");
+  });
+
+  it("serializeStoreNotes round-trips through parseNotes with the store header", () => {
+    const notes: Note[] = [
+      note({ body: "fish counter closes at 6 PM", tags: ["hours"] }),
+      note({ created_at: "2026-06-11T19:05:00.000Z", body: "they stock the Kerrygold I like", private: true }),
+    ];
+    const text = serializeStoreNotes(notes);
+    expect(text).toContain("Store notes authored by this tenant");
+    expect(parseNotes(text)).toEqual(notes);
+  });
+
+  const perTenant = [
+    { author: "alice", notes: [note({ created_at: "2026-06-01T00:00:00.000Z", body: "fish counter closes at 6 PM" })] },
+    {
+      author: "bob",
+      notes: [
+        note({ created_at: "2026-06-02T00:00:00.000Z", body: "parking is brutal after 5" }),
+        note({ created_at: "2026-06-03T00:00:00.000Z", body: "my coupon stash", private: true }),
+      ],
+    },
+  ];
+
+  it("a shared store note is group-visible and attributed to its author", () => {
+    const notes = aggregateNotes("alice", perTenant);
+    const visible = notes.map((n) => [n.author, n.body]);
+    expect(visible).toContainEqual(["alice", "fish counter closes at 6 PM"]);
+    expect(visible).toContainEqual(["bob", "parking is brutal after 5"]);
+  });
+
+  it("a private store note is owner-only", () => {
+    expect(aggregateNotes("alice", perTenant).find((n) => n.body === "my coupon stash")).toBeUndefined();
+    expect(aggregateNotes("bob", perTenant).find((n) => n.body === "my coupon stash")).toBeDefined();
   });
 });

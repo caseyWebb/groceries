@@ -35,6 +35,8 @@ function coerceItem(raw: Record<string, unknown>): GroceryItem {
     name: typeof raw.name === "string" ? raw.name : "",
     quantity: typeof raw.quantity === "string" ? raw.quantity : "1",
     kind: (raw.kind as GroceryItem["kind"]) ?? "grocery",
+    // Legacy items written before the domain facet read as "grocery".
+    domain: typeof raw.domain === "string" ? raw.domain : "grocery",
     status: (raw.status as GroceryItem["status"]) ?? "active",
     source: (raw.source as GroceryItem["source"]) ?? "ad_hoc",
     for_recipes: Array.isArray(raw.for_recipes) ? (raw.for_recipes as string[]) : [],
@@ -82,11 +84,12 @@ export function registerGroceryListTools(server: McpServer, gh: GitHubClient): v
     "add_to_grocery_list",
     {
       description:
-        "Add an item to the grocery list (ingredient/product level, no SKU). Re-adding an existing name merges into it (union for_recipes, reconcile quantity) rather than duplicating. New items start status=active.",
+        "Add an item to the grocery list (ingredient/product level, no SKU). Re-adding an existing name merges into it (union for_recipes, reconcile quantity) rather than duplicating. New items start status=active. `domain` (default 'grocery') is the kind of store it's bought at (grocery | home-improvement | garden | pharmacy | …) — set it for a non-grocery item (e.g. '2x4 lumber' → 'home-improvement') so the in-store walk for that store-type includes it and a grocery walk excludes it.",
       inputSchema: {
         name: z.string(),
         quantity: z.string().optional(),
         kind: z.enum(["grocery", "household", "other"]).optional(),
+        domain: z.string().optional(),
         source: z.enum(["ad_hoc", "menu", "pantry_low", "stockup"]).optional(),
         for_recipes: z.array(z.string()).optional(),
         note: z.string().nullable().optional(),
@@ -108,11 +111,12 @@ export function registerGroceryListTools(server: McpServer, gh: GitHubClient): v
   server.registerTool(
     "update_grocery_list",
     {
-      description: "Patch an existing grocery-list item by name.",
+      description: "Patch an existing grocery-list item by name. `domain` (default 'grocery') is the store-type the item is bought at — set it to re-file an item onto a different store's in-store walk.",
       inputSchema: {
         name: z.string(),
         quantity: z.string().optional(),
         kind: z.enum(["grocery", "household", "other"]).optional(),
+        domain: z.string().optional(),
         status: z.enum(["active", "in_cart", "ordered"]).optional(),
         source: z.enum(["ad_hoc", "menu", "pantry_low", "stockup"]).optional(),
         for_recipes: z.array(z.string()).optional(),

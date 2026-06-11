@@ -15,6 +15,7 @@ function base(): GroceryItem[] {
       name: "olive oil",
       quantity: "1 bottle",
       kind: "grocery",
+      domain: "grocery",
       status: "active",
       source: "menu",
       for_recipes: ["pasta"],
@@ -52,6 +53,19 @@ describe("addToGroceryList", () => {
 
   it("normalizes names for matching", () => {
     expect(normalizeName("  Olive   Oil ")).toBe("olive oil");
+  });
+
+  it("defaults domain to grocery, and round-trips a non-grocery domain", () => {
+    const plain = addToGroceryList([], { name: "milk" }, TODAY).item;
+    expect(plain.domain).toBe("grocery");
+    const lumber = addToGroceryList([], { name: "2x4 lumber", domain: "home-improvement" }, TODAY).item;
+    expect(lumber.domain).toBe("home-improvement");
+  });
+
+  it("a merge preserves the existing domain unless a new one is supplied", () => {
+    const homeItem = addToGroceryList([], { name: "wood glue", domain: "home-improvement" }, TODAY).items;
+    const reAdd = addToGroceryList(homeItem, { name: "Wood Glue", quantity: "2" }, TODAY).item;
+    expect(reAdd.domain).toBe("home-improvement"); // not reset to grocery
   });
 });
 

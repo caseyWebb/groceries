@@ -210,7 +210,7 @@ test('DEPTH_TIERS are cart and corpus', () => {
 
 // --- real-doc contract ---------------------------------------------------
 
-test('AGENT_INSTRUCTIONS.md: 13 workflows with expected needs + library tiers', async () => {
+test('AGENT_INSTRUCTIONS.md: workflows with expected needs + library tiers', async () => {
   const md = await readFile(path.join(REPO_ROOT, 'AGENT_INSTRUCTIONS.md'), 'utf8');
   const parsed = parseInstructions(md);
   assert.deepEqual(validateParsed(parsed).errors, []);
@@ -227,6 +227,7 @@ test('AGENT_INSTRUCTIONS.md: 13 workflows with expected needs + library tiers', 
     'grocery-sale-check',
     'cooking-retrospective',
     'place-grocery-order',
+    'store-walk',
     'configure-grocery-profile',
     'report-grocery-agent-bug',
   ]);
@@ -235,6 +236,7 @@ test('AGENT_INSTRUCTIONS.md: 13 workflows with expected needs + library tiers', 
   assert.deepEqual(needs['grocery-sale-check'], []); // light flow: core only
   assert.deepEqual(needs['cook'], []);
   assert.deepEqual(needs['place-grocery-order'], ['cart']);
+  assert.deepEqual(needs['store-walk'], ['cart']);
 
   // Library tiers emitted; workflows reference, don't inline.
   const files = buildPluginFiles(parsed, { mcpUrl: 'https://x' });

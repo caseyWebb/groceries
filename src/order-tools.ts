@@ -99,6 +99,7 @@ function makeAdvanceInCart(gh: GitHubClient) {
           name: line.name,
           quantity: "1",
           kind: "grocery",
+          domain: "grocery",
           status: "in_cart",
           source: "menu",
           for_recipes: [],

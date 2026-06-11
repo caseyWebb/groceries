@@ -13,6 +13,7 @@ function item(name: string, over: Partial<GroceryItem> = {}): GroceryItem {
     name,
     quantity: "1",
     kind: "grocery",
+    domain: "grocery",
     status: "active",
     source: "ad_hoc",
     for_recipes: [],

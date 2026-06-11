@@ -45,6 +45,20 @@ export interface TreeFile {
   content: string;
 }
 
+/** A file removal in a tree change (Git Data API: tree entry with `sha: null`). */
+export interface TreeDeletion {
+  path: string;
+  delete: true;
+}
+
+/** One entry in a batched commit: a full-content write or a deletion. */
+export type TreeChange = TreeFile | TreeDeletion;
+
+/** True when a tree change removes a file rather than writing content. */
+export function isDeletion(change: TreeChange): change is TreeDeletion {
+  return "delete" in change && change.delete === true;
+}
+
 /** One entry in a directory listing (the subset of the Contents API we use). */
 export interface DirEntry {
   name: string;
@@ -60,8 +74,8 @@ export interface GitHubClient {
   getRef(): Promise<string>;
   /** The tree sha of a commit. */
   getCommitTree(commitSha: string): Promise<string>;
-  /** Create a tree from `base_tree` plus inline file contents; returns the new tree sha. */
-  createTree(baseTree: string, files: TreeFile[]): Promise<string>;
+  /** Create a tree from `base_tree` plus inline file writes/deletions; returns the new tree sha. */
+  createTree(baseTree: string, changes: TreeChange[]): Promise<string>;
   /** Create a commit with one parent; returns the new commit sha. */
   createCommit(message: string, tree: string, parent: string): Promise<string>;
   /**
@@ -191,10 +205,15 @@ export function createGitHubClient(coords: RepoCoords, auth: TokenProvider): Git
     return sha;
   }
 
-  async function createTree(baseTree: string, files: TreeFile[]): Promise<string> {
+  async function createTree(baseTree: string, changes: TreeChange[]): Promise<string> {
     const data = (await requestJson("POST", `${gitBase}/trees`, {
       base_tree: baseTree,
-      tree: files.map((f) => ({ path: f.path, mode: "100644", type: "blob", content: f.content })),
+      // A deletion is a tree entry with `sha: null` (Git Data API); a write carries content.
+      tree: changes.map((c) =>
+        isDeletion(c)
+          ? { path: c.path, mode: "100644", type: "blob", sha: null }
+          : { path: c.path, mode: "100644", type: "blob", content: c.content },
+      ),
     })) as { sha?: string };
     if (!data.sha) throw new GitHubError(502, "Malformed create-tree response");
     return data.sha;
@@ -252,8 +271,8 @@ export function prefixedClient(gh: GitHubClient, prefix: string): GitHubClient {
     listDir: (path) => gh.listDir(at(path)),
     getRef: gh.getRef,
     getCommitTree: gh.getCommitTree,
-    createTree: (baseTree, files) =>
-      gh.createTree(baseTree, files.map((f) => ({ ...f, path: at(f.path) }))),
+    createTree: (baseTree, changes) =>
+      gh.createTree(baseTree, changes.map((c) => ({ ...c, path: at(c.path) }))),
     createCommit: gh.createCommit,
     updateRef: gh.updateRef,
     createIssue: gh.createIssue, // repo-level; path prefix is irrelevant

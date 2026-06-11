@@ -19,8 +19,11 @@ import {
   parseNotes,
   appendNote,
   serializeNotes,
+  serializeStoreNotes,
   notesPath,
+  storeNotesPath,
   aggregateGroupSignal,
+  aggregateNotes,
   type Note,
   type TenantSignal,
 } from "./notes.js";
@@ -104,6 +107,80 @@ export function registerNoteTools(
           perTenant.push({ author: id, notes, rating: row?.rating, status: row?.status });
         }
         return { slug, ...aggregateGroupSignal(tenantId, perTenant) };
+      }),
+  );
+}
+
+/**
+ * Store notes (in-store-fulfillment, D6) — the store analog of recipe notes,
+ * verbatim: attributed, append-mostly, shared-by-default with an optional private
+ * flag, authored structurally in the caller's `users/<id>/store_notes/<slug>.toml`
+ * and aggregated across the group at read time. No overlay/ratings (a store has no
+ * per-tenant disposition the way a recipe does — just notes).
+ */
+export function registerStoreNoteTools(
+  server: McpServer,
+  sharedGh: GitHubClient,
+  personalGh: GitHubClient,
+  tenantId: string,
+  directory: TenantStore,
+): void {
+  server.registerTool(
+    "add_store_note",
+    {
+      description:
+        "Append an attributed note to a store (the store analog of add_recipe_note). Use for both objective observations ('fish counter closes at 6 PM', 'parking is brutal after 5') and personal ones ('they stock the Kerrygold I like'). Append-mostly; author is structural (your subtree), not a field. Set private=true to keep a note to yourself; default is shared with the group. Optional tags. Objective STRUCTURED facts (an item's aisle, a not-carried item) belong in the shared store via update_store — a note is for freeform observations.",
+      inputSchema: {
+        slug: z.string(),
+        body: z.string(),
+        tags: z.array(z.string()).optional(),
+        private: z.boolean().optional(),
+      },
+    },
+    ({ slug, body, tags, private: isPrivate }) =>
+      runTool(async () => {
+        if (!SLUG_RE.test(slug)) {
+          throw new ToolError("validation_failed", `Invalid store slug: ${slug}`, { slug });
+        }
+        if (!body.trim()) {
+          throw new ToolError("validation_failed", "note body must not be empty", { slug });
+        }
+        const path = storeNotesPath(slug);
+        const existing = parseNotes(await readOptional(personalGh, path));
+        const note: Note = {
+          created_at: nowIso(),
+          body,
+          tags: tags ?? [],
+          private: isPrivate ?? false,
+        };
+        const file: TreeFile = { path, content: serializeStoreNotes(appendNote(existing, note)) };
+        const { commit_sha } = await commitFiles(personalGh, [file], `store note on ${slug}`);
+        return { slug, author: tenantId, created_at: note.created_at, commit_sha };
+      }),
+  );
+
+  server.registerTool(
+    "read_store_notes",
+    {
+      description:
+        "Read the GROUP's attributed notes for a store. Returns { notes: [{ author, created_at, body, tags, private }] } aggregated across everyone in your group. You see your own private notes plus everyone's shared notes; other people's private notes are never shown. Surface these alongside read_store during the walk (hours, parking, where-they-stock-X).",
+      inputSchema: { slug: z.string() },
+    },
+    ({ slug }) =>
+      runTool(async () => {
+        if (!SLUG_RE.test(slug)) {
+          throw new ToolError("not_found", `Unknown store: ${slug}`, { slug });
+        }
+        const ids = await directory.list();
+        const perTenant: { author: string; notes: Note[] }[] = [];
+        for (const id of ids) {
+          const prefix = userPrefix(id);
+          const notesText = await readOptional(sharedGh, `${prefix}/${storeNotesPath(slug)}`);
+          const notes = parseNotes(notesText);
+          if (notes.length === 0) continue;
+          perTenant.push({ author: id, notes });
+        }
+        return { slug, notes: aggregateNotes(tenantId, perTenant) };
       }),
   );
 }

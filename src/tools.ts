@@ -16,7 +16,8 @@ import { registerWriteTools } from "./write-tools.js";
 import { registerGroceryListTools } from "./grocery-tools.js";
 import { registerOrderTools } from "./order-tools.js";
 import { registerDiscoveryTools } from "./discovery-tools.js";
-import { registerNoteTools } from "./notes-tools.js";
+import { registerNoteTools, registerStoreNoteTools } from "./notes-tools.js";
+import { registerStoreTools } from "./stores-tools.js";
 import { registerCookingTools } from "./cooking-tools.js";
 import { filterRecipes, type RecipeFilters, type RecipeIndex } from "./recipes.js";
 import { listStorageGuidance, readStorageGuidance } from "./storage-guidance.js";
@@ -725,6 +726,12 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
   // Recipe notes (§8): attributed annotations authored in this tenant's subtree,
   // aggregated across the group at read time (KV tenant directory → each subtree).
   registerNoteTools(server, sharedGh, gh, tenant.id, directoryFromEnv(env));
+
+  // In-store fulfillment: the shared stores/ registry (CRUD, unattributed content)
+  // + attributed per-tenant store notes (the recipe-notes pattern, store analog).
+  // item_location keys normalize through the same aliases the matcher uses.
+  registerStoreTools(server, sharedGh, getAliases);
+  registerStoreNoteTools(server, sharedGh, gh, tenant.id, directoryFromEnv(env));
 
   // place_order — the order-time flush: resolve the list, write the Kroger cart,
   // persist learned SKUs to the SHARED cache. The one tool that reaches the cart.

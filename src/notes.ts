@@ -45,10 +45,23 @@ export interface GroupSignal {
   ratings: { author: string; rating: unknown; status?: unknown }[];
 }
 
-/** Repo-relative path to a tenant's notes file for a slug (under the tenant prefix). */
+/** Repo-relative path to a tenant's recipe-notes file for a slug (under the tenant prefix). */
 export function notesPath(slug: string): string {
   return `notes/${slug}.toml`;
 }
+
+/** Repo-relative path to a tenant's STORE-notes file for a store slug (D6, store analog). */
+export function storeNotesPath(slug: string): string {
+  return `store_notes/${slug}.toml`;
+}
+
+const RECIPE_NOTES_HEADER =
+  "# Recipe notes authored by this tenant (one file per recipe slug).\n" +
+  "# Append-mostly; author is the users/<id>/ path, not a field. private → owner-only.\n\n";
+
+const STORE_NOTES_HEADER =
+  "# Store notes authored by this tenant (one file per store slug).\n" +
+  "# Append-mostly; author is the users/<id>/ path, not a field. private → owner-only.\n\n";
 
 /** Parse a `notes/<slug>.toml` body's `[[notes]]` array; absent/empty → []. */
 export function parseNotes(text: string | null): Note[] {
@@ -73,11 +86,8 @@ export function appendNote(existing: Note[], note: Note): Note[] {
   return [...existing, note];
 }
 
-/** Serialize notes back to `notes/<slug>.toml`, preserving a documentation header. */
-export function serializeNotes(notes: Note[]): string {
-  const header =
-    "# Recipe notes authored by this tenant (one file per recipe slug).\n" +
-    "# Append-mostly; author is the users/<id>/ path, not a field. private → owner-only.\n\n";
+/** Serialize notes back to a `[[notes]]` file, preserving a documentation header. */
+export function serializeNotes(notes: Note[], header: string = RECIPE_NOTES_HEADER): string {
   const data = {
     notes: notes.map((n) => {
       const e: Record<string, unknown> = { created_at: n.created_at, body: n.body };
@@ -89,6 +99,34 @@ export function serializeNotes(notes: Note[]): string {
   return header + stringifyTomlRaw(data) + "\n";
 }
 
+/** Serialize a tenant's store notes (same shape as recipe notes, store-specific header). */
+export function serializeStoreNotes(notes: Note[]): string {
+  return serializeNotes(notes, STORE_NOTES_HEADER);
+}
+
+/**
+ * Apply the group privacy rule to a set of per-tenant note contributions and
+ * return attributed notes: include a note if it is non-private OR authored by the
+ * caller. Ordered by timestamp (stable, author as tiebreak). Shared by recipe-note
+ * and store-note aggregation.
+ */
+export function aggregateNotes(
+  callerId: string,
+  perTenant: { author: string; notes: Note[] }[],
+): AttributedNote[] {
+  const notes: AttributedNote[] = [];
+  for (const t of perTenant) {
+    for (const n of t.notes) {
+      if (n.private && t.author !== callerId) continue;
+      notes.push({ ...n, author: t.author });
+    }
+  }
+  notes.sort((a, b) =>
+    a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.author < b.author ? -1 : 1,
+  );
+  return notes;
+}
+
 /**
  * Aggregate a recipe's group signal from each tenant's contribution (§8.2).
  * Notes: include a note if it is non-private OR authored by the caller, so the
@@ -98,13 +136,9 @@ export function serializeNotes(notes: Note[]): string {
  * ratings by author for determinism.
  */
 export function aggregateGroupSignal(callerId: string, perTenant: TenantSignal[]): GroupSignal {
-  const notes: AttributedNote[] = [];
+  const notes = aggregateNotes(callerId, perTenant);
   const ratings: { author: string; rating: unknown; status?: unknown }[] = [];
   for (const t of perTenant) {
-    for (const n of t.notes) {
-      if (n.private && t.author !== callerId) continue;
-      notes.push({ ...n, author: t.author });
-    }
     if (t.rating != null) {
       ratings.push(
         t.status != null
@@ -113,9 +147,6 @@ export function aggregateGroupSignal(callerId: string, perTenant: TenantSignal[]
       );
     }
   }
-  notes.sort((a, b) =>
-    a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.author < b.author ? -1 : 1,
-  );
   ratings.sort((a, b) => (a.author < b.author ? -1 : a.author > b.author ? 1 : 0));
   return { notes, ratings };
 }

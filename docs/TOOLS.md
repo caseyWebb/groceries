@@ -253,6 +253,7 @@ Add an item (ingredient/product level, no SKU). Keyed by normalized `name` — r
 - `name` (string, required)
 - `quantity` (string, optional) — loose buy amount; defaults to `"1"`
 - `kind` (optional): `grocery | household | other`
+- `domain` (string, optional) — the store-TYPE it's bought at; defaults to `"grocery"` (common values `grocery | home-improvement | garden | pharmacy`). Orthogonal to `kind`; filters which in-store walk includes the item.
 - `source` (optional): `ad_hoc | menu | pantry_low | stockup`
 - `for_recipes` (array of slugs, optional)
 - `note` (string or null, optional) — one-off brand request / occasion
@@ -262,7 +263,7 @@ Add an item (ingredient/product level, no SKU). Keyed by normalized `name` — r
 
 ### `update_grocery_list(name, ...patch)`
 
-Patch an existing item by name (`quantity`, `kind`, `status`, `source`, `for_recipes`, `note`).
+Patch an existing item by name (`quantity`, `kind`, `domain`, `status`, `source`, `for_recipes`, `note`).
 
 **Returns:**
 - `{ item, commit_sha }` — `not_found` if no such item
@@ -275,6 +276,90 @@ Remove an item by name.
 - `{ removed: bool, commit_sha? }`
 
 **Notes:** Promoting a low/out pantry item onto the list is a **prompted** decision (record `source: "pantry_low"`), never automatic. The lifecycle past `active` (`in_cart` → `ordered` → `received`) is driven by `place_order` and the user-asserted transitions — see [`place_order`](#place_orderpayload) below.
+
+---
+
+## Store tools (in-store fulfillment)
+
+The **second fulfillment flush**: a store-walk turns the same SKU-free grocery list into an aisle-ordered shopping list for a specific store (vs. `place_order`'s Kroger online flush). Stores live in the **shared corpus** (`stores/<slug>.toml`, keyed by location); any MCP holder may map or edit one with no extra gate (the `update_discovery_sources` posture). There is **no `stores` index** — the set is small, so `list_stores` reads the directory. Objective store content is **unattributed** (like recipe content); freeform observations are attributed store notes (`add_store_note` / `read_store_notes`). See `docs/SCHEMAS.md` for the `stores/<slug>.toml` and `store_notes/<slug>.toml` schemas.
+
+### `list_stores()`
+
+List the mapped stores. Reads the shared `stores/` directory directly; an absent/empty registry returns `{ stores: [] }` (the walk still works, degraded).
+
+**Returns:**
+- `{ stores: [{ slug, name, label?, domain, has_layout }] }` — `has_layout` is true when the store has an aisle map.
+
+### `read_store(slug)`
+
+Read one store's objective content: identity (`name`, `label?`, `chain?`, `address?`, `domain`), the ordered `aisles` layout, the sparse `item_locations`, and `doesnt_carry`.
+
+**Params:**
+- `slug` (string, required)
+
+**Returns:**
+- `{ slug, name, label?, chain?, address?, domain, aisles, item_locations, doesnt_carry }`
+
+**Errors (structured):**
+- `{ error: "not_found" }` — unknown (or malformed) slug.
+
+### `add_store(slug, name, label?, chain?, address?, domain?, aisles?, item_locations?, doesnt_carry?)`
+
+Map a new store location. `slug` is a kebab-case **location** id (`west-7th-tom-thumb`, not `tom-thumb`). `domain` defaults to `"grocery"`. `aisles`/`item_locations`/`doesnt_carry` are usually omitted at creation and grown from the walk. `item_location` `item` keys are normalized (same matcher as pantry verify). Persists via the atomic commit engine.
+
+**Returns:**
+- `{ store, commit_sha }`
+
+**Errors (structured):**
+- `{ error: "validation_failed" }` — invalid slug or empty name.
+- `{ error: "slug_exists" }` — the slug is already mapped (edit with `update_store`).
+
+### `update_store(slug, operations)`
+
+Edit a mapped store with operations (`update_pantry`/`update_kitchen` style). One tool covers identity edits, the whole aisle layout, **and** the lazy facet growth:
+- `{ op: "set_identity", field, value }` — `field` ∈ `name | label | chain | address | domain`.
+- `{ op: "set_aisles", aisles: [{ number?, label?, sections[] }] }` — replaces the whole ordered layout (the first-visit mapping path).
+- `{ op: "add_item_location", item, aisle, detail? }` / `{ op: "remove_item_location", item }` — the sparse where-it-hides hints (`item` normalized → synonyms resolve to one key; an add re-points an existing key).
+- `{ op: "add_doesnt_carry", item }` / `{ op: "remove_doesnt_carry", item }` — the sparse not-carried set (a found item clears its entry).
+
+**Returns:**
+- `{ slug, applied: [...], conflicts: [...], commit_sha? }` — `conflicts` reports e.g. a remove whose target isn't present; no commit when nothing applied.
+
+**Errors (structured):**
+- `{ error: "not_found" }` — unknown slug.
+
+### `remove_store(slug)`
+
+Remove a mapped store (deletes `stores/<slug>.toml` atomically). Members' attributed store notes are left untouched.
+
+**Returns:**
+- `{ slug, removed: true, commit_sha }`
+
+**Errors (structured):**
+- `{ error: "not_found" }` — unknown slug.
+
+### `add_store_note(slug, body, tags?, private?)`
+
+Append an attributed note to a store — the store analog of `add_recipe_note`. For both objective observations ("fish counter closes at 6 PM") and personal ones ("they stock the Kerrygold I like"). Append-mostly; authored in the caller's `users/<id>/store_notes/<slug>.toml` (structural authorship). Objective *structured* facts (an item's aisle, a not-carried item) belong in the shared store via `update_store`; a note is for freeform observations.
+
+**Params:**
+- `slug` (string, required), `body` (string, required), `tags` (array, optional), `private` (boolean, optional — default `false`).
+
+**Returns:**
+- `{ slug, author, created_at, commit_sha }`
+
+**Errors (structured):**
+- `{ error: "validation_failed" }` — malformed slug or empty body.
+
+### `read_store_notes(slug)`
+
+Read the **group's** attributed notes for a store, aggregated across everyone at read time. The caller sees their **own** private notes plus **everyone's shared** notes; another member's `private` note is never returned.
+
+**Params:**
+- `slug` (string, required)
+
+**Returns:**
+- `{ slug, notes: [{ author, created_at, body, tags, private }] }` — ordered by timestamp.
 
 ---
 

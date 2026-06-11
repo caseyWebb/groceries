@@ -68,6 +68,33 @@ describe("validateFile", () => {
     expect(() =>
       validateFile("grocery_list.toml", '[[items]]\nname = "oil"\nstatus = "active"\nkind = "snacks"\n'),
     ).toThrowError(/kind/);
+    // domain is a free string: a home-improvement item passes; a non-string fails.
+    expect(() =>
+      validateFile("grocery_list.toml", '[[items]]\nname = "2x4"\nstatus = "active"\ndomain = "home-improvement"\n'),
+    ).not.toThrow();
+    expect(() =>
+      validateFile("grocery_list.toml", '[[items]]\nname = "oil"\nstatus = "active"\ndomain = 3\n'),
+    ).toThrowError(/domain/);
+  });
+
+  it("validates a store: requires slug+name, checks aisles/item_locations/doesnt_carry shapes", () => {
+    expect(() =>
+      validateFile(
+        "stores/west-7th-tom-thumb.toml",
+        'slug = "west-7th-tom-thumb"\nname = "Tom Thumb"\ndomain = "grocery"\n[[aisles]]\nnumber = 1\nsections = ["produce"]\n[[item_locations]]\nitem = "tahini"\naisle = "9"\n',
+      ),
+    ).not.toThrow();
+    expect(() => validateFile("stores/x.toml", 'name = "X"\n')).toThrowError(/missing required field `slug`/);
+    expect(() => validateFile("stores/x.toml", 'slug = "x"\n')).toThrowError(/missing required field `name`/);
+    expect(() =>
+      validateFile("stores/x.toml", 'slug = "x"\nname = "X"\n[[aisles]]\nsections = ["a"]\n'),
+    ).toThrowError(/missing a `number` or `label`/);
+    expect(() =>
+      validateFile("stores/x.toml", 'slug = "x"\nname = "X"\n[[item_locations]]\naisle = "1"\n'),
+    ).toThrowError(/item_location is missing required field `item`/);
+    expect(() =>
+      validateFile("stores/x.toml", 'slug = "x"\nname = "X"\ndoesnt_carry = "harissa"\n'),
+    ).toThrowError(/`doesnt_carry` must be an array of strings/);
   });
 
   it("validates cooking_log entries: date, type enum, required recipe/name", () => {

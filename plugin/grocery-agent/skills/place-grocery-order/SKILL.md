@@ -7,7 +7,7 @@ description: "Flush the grocery list to the Kroger cart — the deliberate act d
 
 # Order placement
 
-This is the **flush** — distinct from the menu request's capture. It may happen in the same sitting as a menu request or days later.
+This is the **online flush** (Kroger) — distinct from the menu request's capture, and the sibling of the in-store walk (the store-walk flow). It may happen in the same sitting as a menu request or days later. Use it when my fulfillment mode is Kroger online; if `primary` is a store slug (or I named a store for the trip), run store-walk instead.
 
 1. **Stale-cart check first.** Read the grocery list (`read_grocery_list`). If any items are still `in_cart` from a prior order that was never confirmed `ordered`, remind me to clear the Kroger cart manually before proceeding (silently flushing again double-adds). Wait for my acknowledgment.
 

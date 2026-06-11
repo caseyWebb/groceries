@@ -9,6 +9,7 @@ import {
   buildRecipeIndexes,
   validateReadyToEatCatalog,
   validateKitchenInventory,
+  validateStore,
   validateDiscoveriesInbox,
   validateDiscoverySources,
   parseCheckToml,
@@ -17,6 +18,7 @@ import {
   deriveSlug,
   hasH2Section,
   validateCookingArtifacts,
+  run,
 } from '../scripts/build-indexes.mjs';
 
 const FIXTURES = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fixtures', 'recipes');
@@ -295,6 +297,65 @@ test('validateKitchenInventory: clean inventory passes, off-vocab owned reports'
   assert.ok(offVocab.some((e) => /`owned` slug "air-fryer" is not in the controlled vocabulary/.test(e)), offVocab.join('\n'));
   const nonArray = validateKitchenInventory({ owned: 'blender' }, 'u/kitchen.toml');
   assert.ok(nonArray.some((e) => /`owned` must be an array/.test(e)), nonArray.join('\n'));
+});
+
+test('validateStore: clean store passes, malformed aisles/item_locations report', () => {
+  const ok = {
+    slug: 'west-7th-tom-thumb',
+    name: 'Tom Thumb',
+    label: 'West 7th',
+    domain: 'grocery',
+    aisles: [
+      { number: 1, sections: ['produce', 'herbs'] },
+      { label: 'Back wall', sections: ['meat', 'seafood'] },
+    ],
+    item_locations: [{ item: 'tahini', aisle: '9', detail: 'bottom shelf' }],
+    doesnt_carry: ['harissa'],
+  };
+  assert.deepEqual(validateStore(ok, 'stores/west-7th-tom-thumb.toml'), []);
+
+  // Missing required slug/name.
+  const noId = validateStore({ aisles: [] }, 'stores/x.toml');
+  assert.ok(noId.some((e) => /missing required `slug`/.test(e)), noId.join('\n'));
+  assert.ok(noId.some((e) => /missing required `name`/.test(e)), noId.join('\n'));
+
+  // Aisle with neither number nor label; non-string sections.
+  const badAisle = validateStore(
+    { slug: 's', name: 'S', aisles: [{ sections: ['ok'] }, { number: 2, sections: [3] }] },
+    'stores/s.toml',
+  );
+  assert.ok(badAisle.some((e) => /missing a `number` or `label`/.test(e)), badAisle.join('\n'));
+  assert.ok(badAisle.some((e) => /`sections` must be an array of strings/.test(e)), badAisle.join('\n'));
+
+  // item_location missing item / missing aisle; non-array doesnt_carry.
+  const badLoc = validateStore(
+    { slug: 's', name: 'S', item_locations: [{ aisle: '1' }, { item: 'miso' }], doesnt_carry: 'harissa' },
+    'stores/s.toml',
+  );
+  assert.ok(badLoc.some((e) => /item_location is missing required `item`/.test(e)), badLoc.join('\n'));
+  assert.ok(badLoc.some((e) => /is missing a valid `aisle`/.test(e)), badLoc.join('\n'));
+  assert.ok(badLoc.some((e) => /`doesnt_carry` must be an array of strings/.test(e)), badLoc.join('\n'));
+});
+
+test('run: an absent stores/ tree is valid (no store error)', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'grocery-store-'));
+  await mkdir(path.join(root, 'recipes'), { recursive: true });
+  await writeFile(path.join(root, 'recipes', 'r.md'), recipe('title: R', SECTIONS));
+  const { errors } = await run({ root });
+  assert.deepEqual(errors, []);
+  await rm(root, { recursive: true, force: true });
+});
+
+test('run: a malformed store in stores/ fails the build', async () => {
+  const root = await mkdtemp(path.join(tmpdir(), 'grocery-store-'));
+  await mkdir(path.join(root, 'recipes'), { recursive: true });
+  await writeFile(path.join(root, 'recipes', 'r.md'), recipe('title: R', SECTIONS));
+  await mkdir(path.join(root, 'stores'), { recursive: true });
+  // Missing required `name`.
+  await writeFile(path.join(root, 'stores', 'bad.toml'), 'slug = "bad"\n');
+  const { errors } = await run({ root });
+  assert.ok(errors.some((e) => /stores\/bad\.toml: store is missing required `name`/.test(e)), errors.join('\n'));
+  await rm(root, { recursive: true, force: true });
 });
 
 // --- shared discovery-source structural validation ----------------------
