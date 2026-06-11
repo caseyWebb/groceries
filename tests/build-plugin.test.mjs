@@ -195,9 +195,10 @@ test('buildPluginFiles threads version into the manifest (monotonic claude.ai au
   assert.equal(with42.version, '0.0.42');
 });
 
-test('resolveVersion: 0.0.<commit-count> in a git checkout, undefined otherwise', () => {
+test('resolveVersion: 0.1.<commit-count> in a git checkout, undefined otherwise', () => {
   const v = resolveVersion(); // REPO_ROOT is a git checkout
-  assert.match(v, /^0\.0\.\d+$/);
+  // `0.1.` floor (not `0.0.`) so it exceeds the old hand-published 0.1.1 — see resolveVersion.
+  assert.match(v, /^0\.1\.\d+$/);
   // Non-git path (a bare temp dir would fail git) → undefined; use an impossible cwd.
   assert.equal(resolveVersion('/nonexistent-path-for-build-plugin-test'), undefined);
 });

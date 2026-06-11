@@ -252,14 +252,19 @@ export function buildPluginFiles(parsed, { mcpUrl = MCP_URL_PLACEHOLDER, version
 
 // --- CLI -----------------------------------------------------------------
 
-// Monotonic plugin version from git: `0.0.<commit-count>`. The count only grows as
+// Monotonic plugin version from git: `0.1.<commit-count>`. The count only grows as
 // commits land, so each rebuilt-and-committed bundle is strictly newer than the last
-// — what claude.ai's auto-update compares (see the note by PLUGIN_NAME). Returns
-// undefined outside a git checkout (throwaway/dist builds), which ship no version.
+// — what claude.ai's auto-update compares (see the note by PLUGIN_NAME). The `0.1.`
+// prefix is a deliberate FLOOR, not cosmetic: this plugin once hand-published `0.1.1`
+// (then dropped the field), and claude.ai gates on strictly-greater, so it remembered
+// `0.1.1` as the high-water mark. A `0.0.<count>` scheme is *below* `0.1.1` in semver
+// (minor 0 < 1) and would never auto-update past it. `0.1.<count>` (count ≥ 150 ≫ 1)
+// dominates the old `0.1.1` and stays monotonic. Returns undefined outside a git
+// checkout (throwaway/dist builds), which ship no version.
 export function resolveVersion(cwd = REPO_ROOT) {
   try {
     const count = execFileSync('git', ['rev-list', '--count', 'HEAD'], { cwd, encoding: 'utf8' }).trim();
-    return /^\d+$/.test(count) ? `0.0.${count}` : undefined;
+    return /^\d+$/.test(count) ? `0.1.${count}` : undefined;
   } catch {
     return undefined;
   }
