@@ -436,16 +436,19 @@ export async function handleInboundEmail(message: InboundMessage, env: Env): Pro
   const fromAddress = (email.from?.address ?? message.from ?? "").toLowerCase();
 
   const gate = gateMessage({ from: fromAddress, allowlist, auth: verdicts });
-  // TEMP DIAGNOSTIC (remove after smoke test): surface the gate decision + the raw
-  // Cloudflare Authentication-Results so we can see exactly why a message is gated.
+  // TEMP DIAGNOSTIC (remove after smoke test): message.headers carried no
+  // Authentication-Results — dump where the auth verdict actually lives (the raw
+  // headers postal-mime parses, vs. the live Headers object) so we read the right one.
+  const pmHeaders = (email.headers ?? []) as { key: string; value: string }[];
   console.log(
-    "[email] gate " +
+    "[email] headers " +
       JSON.stringify({
         from: fromAddress,
-        authRaw: message.headers.get("authentication-results"),
-        verdicts,
-        members: [...allowlist.members],
-        senders: [...allowlist.senders],
+        msgHeaderKeys: [...message.headers.keys()],
+        pmHeaderKeys: pmHeaders.map((h) => h.key),
+        authish: pmHeaders
+          .filter((h) => /auth|spf|dkim|dmarc|arc|received/i.test(h.key))
+          .map((h) => `${h.key}: ${h.value}`.slice(0, 240)),
         gate,
       }),
   );
