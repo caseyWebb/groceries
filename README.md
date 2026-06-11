@@ -5,6 +5,10 @@ Kroger cart through conversation — you talk to it like a knowledgeable friend 
 knows your kitchen, not a service you issue commands to. It runs inside **Claude.ai**
 (web + mobile) and is self-hostable for a small friend group.
 
+> **Status:** working end-to-end and in personal use — a release candidate, not a
+> packaged product. It's a single-maintainer project; self-hosting works but assumes
+> you're comfortable with Cloudflare, GitHub Actions, and a Kroger Developer account.
+
 This repository is the **code**: the `grocery-mcp` MCP server and the agent's
 persona ([`AGENT_INSTRUCTIONS.md`](AGENT_INSTRUCTIONS.md)). The **data** — recipes,
 pantry, preferences — lives in a separate private **data repo** per deployment.
@@ -32,23 +36,25 @@ deterministic (matching, filtering, file I/O, commits) is the Worker's.
 | --- | --- |
 | `src/`, `test/`, `wrangler.jsonc` | the Cloudflare Worker (MCP server + OAuth provider) |
 | `scripts/` | index + static-site build tooling, run by data repos via reusable CI |
-| `.github/workflows/` | `deploy-worker` (CD), reusable `data-build-*`, operator `onboard`/`revoke` |
-| `AGENT_INSTRUCTIONS.md` | the agent persona, pasted into each member's Claude.ai Project |
+| `.github/workflows/` | `ci` (typecheck + tests) + reusable `data-*` workflows operators call |
+| `AGENT_INSTRUCTIONS.md` | the agent persona; source for the `plugin/` bundle installed in Claude.ai |
 | `docs/` | [PROJECT](docs/PROJECT.md) (architecture), [SCHEMAS](docs/SCHEMAS.md), [TOOLS](docs/TOOLS.md), [SELF_HOSTING](docs/SELF_HOSTING.md) |
+| `openspec/` | the change/spec history — how the system was built, and the contract for changes |
 | `CLAUDE.md` | development guide for working in this repo |
-| `ROADMAP.md` | the sequence of OpenSpec changes building the system |
 
 The data repo is created from the [`groceries-agent-data-template`](https://github.com/caseyWebb/groceries-agent-data-template), which is also vendored here as a submodule at `docs/data-template/` for reference.
 
 ## Self-hosting
 
-Self-host for yourself or a friend group **without running anything locally** — fork
-this repo and drive it from GitHub Actions:
+Self-host for yourself or a friend group **without forking this repo and without
+running anything locally** — your private **data repo is the control plane**, and it
+drives everything from GitHub Actions:
 
-1. **Fork** this repo, enable Actions, set the `CLOUDFLARE_API_TOKEN` secret and your
-   `wrangler.jsonc` vars (via the web editor).
-2. **Create a data repo** from the template; register a GitHub App + Kroger app.
-3. **Deploy** the Worker (push, or run the *Deploy Worker* Action).
+1. **Create a data repo** from the template (private); add your `wrangler.jsonc` vars
+   and the one `CLOUDFLARE_API_TOKEN` Actions secret. It carries thin caller
+   workflows that `uses:` the reusable workflows here — no fork to maintain.
+2. **Register** a GitHub App (data-repo access) and a Kroger Developer app.
+3. **Deploy** the Worker via the data repo's *Deploy Worker* Action.
 4. **Onboard** yourself and friends with the *Onboard member* Action — it mints an
    invite code; their `users/<username>/` subtree is created on first use.
 

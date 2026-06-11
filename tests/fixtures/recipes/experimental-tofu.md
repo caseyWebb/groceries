@@ -18,8 +18,6 @@ discovered_at: 2025-05-20
 discovery_source: serious-eats
 ingredients_key: [tofu, cornstarch, chili crisp]
 meal_preppable: false
-uses_components: []
-produces_components: []
 source: https://www.seriouseats.com/crispy-tofu
 ---
 

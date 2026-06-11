@@ -39,8 +39,8 @@ const recipe = (fm, body = SECTIONS) => `---\n${fm}\n---\n${body}`;
 
 // --- 4.2 index shapes from fixtures -------------------------------------
 
-test('builds recipe + component indexes from fixtures', async () => {
-  const { recipes, components, errors, warnings } = await buildRecipeIndexes(FIXTURES);
+test('builds recipe index from fixtures', async () => {
+  const { recipes, errors, warnings } = await buildRecipeIndexes(FIXTURES);
   assert.deepEqual(errors, []);
   assert.deepEqual(warnings, []); // fixtures have all recommended fields
 
@@ -51,7 +51,6 @@ test('builds recipe + component indexes from fixtures', async () => {
 
   const salmon = recipes['salmon-with-rice'];
   assert.equal(salmon.slug, 'salmon-with-rice');
-  assert.equal(salmon.produces_components[0], 'cooked-rice');
 
   // Subjective fields are per-tenant (overlay/cooking_log) and SHALL NOT appear
   // in the shared index, even when a not-yet-migrated fixture still carries them.
@@ -59,12 +58,6 @@ test('builds recipe + component indexes from fixtures', async () => {
   assert.equal(salmon.rating, undefined);
   assert.equal(salmon.last_cooked, undefined);
   assert.equal(recipes['experimental-tofu'].status, undefined);
-
-  // component adjacency
-  assert.deepEqual(components['cooked-rice'], {
-    produced_by: ['salmon-with-rice'],
-    used_by: ['kimchi-fried-rice'],
-  });
 });
 
 test('validateReadyToEatCatalog: clean catalog passes, malformed ones report', () => {
@@ -97,7 +90,6 @@ test('output is deterministic across runs', async () => {
   const a = await buildRecipeIndexes(FIXTURES);
   const b = await buildRecipeIndexes(FIXTURES);
   assert.equal(stableStringify(a.recipes), stableStringify(b.recipes));
-  assert.equal(stableStringify(a.components), stableStringify(b.components));
 });
 
 test('subjective date field last_cooked is stripped from the shared index', async () => {
@@ -142,15 +134,6 @@ test('hard-fail: duplicate slug across nested dirs', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-test('hard-fail: unresolved component reference', async () => {
-  const dir = await tmpRecipes({
-    'user.md': recipe('title: User\nstatus: active\nuses_components: [ghost-component]'),
-  });
-  const { errors } = await buildRecipeIndexes(dir);
-  assert.ok(errors.some((e) => e.includes('unresolved component')), errors.join('\n'));
-  await rm(dir, { recursive: true, force: true });
-});
-
 test('hard-fail: unparseable frontmatter', async () => {
   const dir = await tmpRecipes({ 'broken.md': '---\ntitle: [unclosed\n---\nbody\n' });
   const { errors } = await buildRecipeIndexes(dir);
@@ -163,15 +146,6 @@ test('soft: missing recommended fields warns but does not fail', async () => {
   const { errors, warnings } = await buildRecipeIndexes(dir);
   assert.deepEqual(errors, []);
   assert.ok(warnings.some((w) => w.includes('recommended')), warnings.join('\n'));
-  await rm(dir, { recursive: true, force: true });
-});
-
-test('producing a component with no consumer is allowed', async () => {
-  const dir = await tmpRecipes({
-    'producer.md': recipe('title: P\nstatus: active\nprotein: fish\ntime_total: 10\ningredients_key: [x]\nproduces_components: [extra-rice]'),
-  });
-  const { errors } = await buildRecipeIndexes(dir);
-  assert.deepEqual(errors, []);
   await rm(dir, { recursive: true, force: true });
 });
 

@@ -11,8 +11,7 @@ A personal grocery agent that runs in **Claude.ai** (not Claude Code). This is t
 - **`src/` + `test/` + `wrangler.jsonc`** — the repo root **is** the Cloudflare Worker (TypeScript) exposing the `grocery-mcp` MCP server: the domain tool surface (pantry, recipes, Kroger, substitutions, cart), deployed to `grocery-mcp.<subdomain>.workers.dev`. It reads/writes the data repo via a GitHub App installation token; "which tenant" is a `users/<username>/` path prefix in that repo. The Worker is also an OAuth 2.1 provider — members connect Claude.ai via an operator-issued invite code (`src/authorize.ts`).
 - **`scripts/`** — index + static-site build tooling (`build-indexes.mjs`, `build-site.mjs`, `site-assets/`). Data repos run these against their own content via the reusable CI workflows in `.github/workflows/data-build-*.yml` (`--root <dir>`).
 - **`docs/`** — `PROJECT.md` (architecture), `SCHEMAS.md` (file formats), `TOOLS.md` (the tool contract — keep in sync with the `src/` code), `SELF_HOSTING.md` (operator setup).
-- **`openspec/`** — the change/spec workflow (see below).
-- **`ROADMAP.md`** — the sequence of OpenSpec changes building the system.
+- **`openspec/`** — the change/spec workflow (see below). The archived changes are the build history; the specs are the living contract.
 
 There is **no data at the root of this repo.** The data repo (created from `groceries-agent-data-template`) holds shared content at its root (`recipes/`, `aliases.toml`, `substitutions.toml`, `skus/`, `ready_to_eat/`, `storage_guidance/`, `feeds.toml`, `discoveries_inbox.toml`, `discovery_sources.toml`, `_indexes/`) and per-tenant state under `users/<username>/`. `storage_guidance/` is curated, hand-maintained config (edit-when-directed; no write tool) — opinionated put-away advice keyed by storage class, surfaced by the agent when new perishables arrive. **Discovery sources are shared/top-level** (not per-tenant): `feeds.toml` (RSS, curated config), `discoveries_inbox.toml` (forwarded-newsletter candidates — agent/`email()`-writable side-effect file), and `discovery_sources.toml` (inbound-email allowlist — curated config, but widenable by anyone via `update_discovery_sources` since they're already trusted with the MCP).
 
@@ -76,7 +75,7 @@ npm test                                                   # node --test (root t
 
 ## OpenSpec change workflow
 
-This repo is built as a sequence of OpenSpec changes (see `ROADMAP.md`). Each change carries `proposal.md`, `design.md`, `specs/` deltas, and `tasks.md`.
+This repo was built as a sequence of OpenSpec changes (see `openspec/changes/archive/` for the history). Each change carries `proposal.md`, `design.md`, `specs/` deltas, and `tasks.md`; further work continues the same workflow.
 
 ```bash
 openspec list                       # active changes

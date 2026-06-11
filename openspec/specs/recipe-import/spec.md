@@ -131,20 +131,6 @@ The enrichment pass SHALL sanity-check the deterministically-extracted fields ag
 - **WHEN** a recipe's instructions were extracted as a single undivided block (e.g. the egg-salad sandwich)
 - **THEN** the enrichment pass splits them into discrete steps in the body
 
-### Requirement: Component reconciliation without auto-merge
-
-A final pass SHALL wire `uses_components` / `produces_components` across the corpus such that every `uses_components` reference resolves to a recipe that produces it, and SHALL surface near-duplicate recipes for human review rather than merging them automatically.
-
-#### Scenario: Component references resolve
-
-- **WHEN** a recipe declares `uses_components: [cooked-rice]`
-- **THEN** some recipe in the corpus declares `produces_components: [cooked-rice]` and the build does not fail on an unresolved reference
-
-#### Scenario: Near-duplicates surfaced, not merged
-
-- **WHEN** two recipes look like variants of the same dish (e.g. stovetop vs. pressure-cooker butter chicken)
-- **THEN** both are retained and the pair is reported for the user to decide
-
 ### Requirement: Conservative required-equipment classification on import
 
 The recipe-add path SHALL classify `requires_equipment` as a judgment field during enrichment, under a conservative rubric: it SHALL default to empty and SHALL tag a controlled-vocabulary slug only when the dish is genuinely impossible without that equipment (no recipe-preserving workaround exists). The schema.org `tool` list and the instruction prose SHALL be treated as **hints, never the verdict** — they enumerate every utensil (bowls, whisks, knives) which are not vital and not in the vocabulary. When in doubt, the classifier SHALL leave the equipment out, because a missed requirement is caught later by the `cook` skill's equipment step whereas a wrong "vital" tag silently hides a makeable recipe. The classified `requires_equipment` SHALL be persisted via `create_recipe`, and SHALL be the same for sides imported through the `pairs_with` bootstrap (which reuse the same create pipeline).
@@ -195,4 +181,13 @@ The system SHALL provide a one-time backfill that populates `perishable_ingredie
 
 - **WHEN** the backfill runs over recipes that predate the field
 - **THEN** each gains a `perishable_ingredients` list derived by the import-time classifier, with no other content altered
+
+### Requirement: Near-duplicate reconciliation without auto-merge
+
+A final pass SHALL surface near-duplicate recipes for human review rather than merging them automatically.
+
+#### Scenario: Near-duplicates surfaced, not merged
+
+- **WHEN** two recipes look like variants of the same dish (e.g. stovetop vs. pressure-cooker butter chicken)
+- **THEN** both are retained and the pair is reported for the user to decide
 

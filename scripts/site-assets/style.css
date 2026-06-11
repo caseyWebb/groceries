@@ -358,13 +358,11 @@ ol.instructions li[aria-current="step"] {
   margin: -0.4rem -0.6rem;
 }
 
-/* Component cross-links + source */
-.components, .source {
+/* Source link */
+.source {
   max-inline-size: var(--measure);
   font-size: 0.95rem;
 }
-.components h2 { font-size: 1.1rem; border: 0; }
-.components ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
 
 /* Read-aloud control injected by read-aloud.js */
 .read-aloud {
@@ -396,7 +394,7 @@ ol.instructions li[aria-current="step"] {
     grid-column: 1;
   }
   .recipe-body .section-instructions { grid-column: 2; grid-row: 1 / 99; }
-  .recipe-body .section-generic, .recipe-body .components, .recipe-body .source {
+  .recipe-body .section-generic, .recipe-body .source {
     grid-column: 1 / -1;
   }
 }

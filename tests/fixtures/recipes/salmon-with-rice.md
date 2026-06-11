@@ -18,8 +18,6 @@ discovered_at: null
 discovery_source: null
 ingredients_key: [salmon, rice, soy sauce, scallion]
 meal_preppable: true
-uses_components: []
-produces_components: [cooked-rice]
 source: null
 ---
 

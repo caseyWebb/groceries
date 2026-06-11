@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 // build-site.mjs — static site generator for the recipe corpus.
 //
-// Reads recipes/*.md (frontmatter via gray-matter, body via marked) and the
-// component adjacency in _indexes/components.json, then emits a static site/:
-// one index page, one page per recipe, plus copied client assets, a web app
-// manifest and a content-hashed service worker. No framework, no bundler.
+// Reads recipes/*.md (frontmatter via gray-matter, body via marked), then emits
+// a static site/: one index page, one page per recipe, plus copied client
+// assets, a web app manifest and a content-hashed service worker. No framework,
+// no bundler.
 //
 // Mirrors build-indexes.mjs: ESM, hand-rolled, deterministic (sorted iteration,
 // stable formatting) so an unchanged corpus produces byte-identical output. All
@@ -136,36 +136,6 @@ export function renderBody(content) {
   return { sectionsHtml: sections.join('\n'), stepCount };
 }
 
-// --- component cross-links ----------------------------------------------
-
-// Bidirectional links for a recipe given the components adjacency graph.
-// Producers link to consumers; consumers link to the producer(s). Returns ''
-// when the recipe has no component relationships.
-export function renderComponents(recipe, components, titleOf) {
-  const link = (slug) => `<a href="${escapeHtml(slug)}.html">${escapeHtml(titleOf(slug) || slug)}</a>`;
-  const blocks = [];
-
-  for (const c of asArray(recipe.produces_components)) {
-    const consumers = (components[c]?.used_by || []).filter((s) => s !== recipe.slug);
-    if (consumers.length) {
-      blocks.push(`<p>Makes a component used in: ${consumers.sort().map(link).join(', ')}.</p>`);
-    }
-  }
-  for (const c of asArray(recipe.uses_components)) {
-    const producers = (components[c]?.produced_by || []).filter((s) => s !== recipe.slug);
-    if (producers.length) {
-      blocks.push(`<p>Builds on: ${producers.sort().map(link).join(', ')}.</p>`);
-    }
-  }
-  if (!blocks.length) return '';
-  return (
-    `    <section class="components" aria-labelledby="sec-related">\n` +
-    `      <h2 id="sec-related">Related recipes</h2>\n` +
-    blocks.map((b) => `      ${b}`).join('\n') +
-    `\n    </section>`
-  );
-}
-
 // --- page shells ---------------------------------------------------------
 
 function head(title, { extraStyle = '' } = {}) {
@@ -198,9 +168,8 @@ function tagRow(tags) {
 
 // --- recipe page ---------------------------------------------------------
 
-export function renderRecipePage(recipe, components, titleOf) {
+export function renderRecipePage(recipe) {
   const { sectionsHtml, stepCount } = renderBody(recipe.content);
-  const componentsHtml = renderComponents(recipe, components, titleOf);
   const hasCook = /section-ingredients/.test(sectionsHtml) && /section-instructions/.test(sectionsHtml);
 
   const meta = [
@@ -224,7 +193,6 @@ export function renderRecipePage(recipe, components, titleOf) {
     `      </header>\n` +
     `      <div class="recipe-body${hasCook ? ' has-cook' : ''}">\n` +
     sectionsHtml +
-    (componentsHtml ? `\n${componentsHtml}` : '') +
     (source ? `\n${source}` : '') +
     `\n      </div>\n` +
     `    </article>`;
@@ -461,25 +429,16 @@ export async function loadRecipes(recipesDir) {
 
 // --- orchestration -------------------------------------------------------
 
-export async function buildSite({ recipesDir, componentsPath, assetsDir = ASSETS_DIR } = {}) {
+export async function buildSite({ recipesDir, assetsDir = ASSETS_DIR } = {}) {
   recipesDir ??= path.join(REPO_ROOT, 'recipes');
-  componentsPath ??= path.join(REPO_ROOT, '_indexes', 'components.json');
 
   const recipes = await loadRecipes(recipesDir);
-  let components = {};
-  try {
-    components = JSON.parse(await readFile(componentsPath, 'utf8'));
-  } catch (err) {
-    if (err.code !== 'ENOENT') throw err;
-  }
-
-  const titleOf = (slug) => recipes.find((r) => r.slug === slug)?.title;
   const ordered = orderRecipes(recipes);
 
   // Collect every output file (path -> contents) before hashing for the SW.
   const files = new Map();
   files.set('index.html', renderIndexPage(recipes));
-  for (const r of ordered) files.set(`${r.slug}.html`, renderRecipePage(r, components, titleOf));
+  for (const r of ordered) files.set(`${r.slug}.html`, renderRecipePage(r));
   files.set('manifest.webmanifest', renderManifest());
   for (const name of STATIC_ASSETS) {
     files.set(name, await readFile(path.join(assetsDir, name), 'utf8'));
@@ -505,8 +464,8 @@ async function writeSite(files, outDir) {
 }
 
 async function main() {
-  // --root <dir> builds a SEPARATE data checkout (recipes/ + _indexes/components.json
-  // live there); defaults to this repo. --out <dir> overrides the output (default <root>/site).
+  // --root <dir> builds a SEPARATE data checkout (recipes/ lives there); defaults
+  // to this repo. --out <dir> overrides the output (default <root>/site).
   const rootArg = process.argv.indexOf('--root');
   const root = rootArg !== -1 ? path.resolve(process.argv[rootArg + 1]) : REPO_ROOT;
   const outArg = process.argv.indexOf('--out');
@@ -514,7 +473,6 @@ async function main() {
 
   const { files, recipeCount } = await buildSite({
     recipesDir: path.join(root, 'recipes'),
-    componentsPath: path.join(root, '_indexes', 'components.json'),
   });
   await writeSite(files, outDir);
   console.log(`site built: ${recipeCount} recipe(s), ${files.size} file(s) → ${path.relative(root, outDir) || outDir}`);

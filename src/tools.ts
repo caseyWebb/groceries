@@ -626,7 +626,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "match_ingredient_to_kroger_sku",
     {
       description:
-        "Run the resolve-only 7-step matching pipeline for one ingredient. Returns a confident match, OR the FULL set of ambiguous candidates (every fulfillable product for the term, relevance-ranked — not truncated, so you can list/compare them all without re-searching), OR unavailable. Never writes the cache (that rides write_cart_and_commit) and never substitutes (that's propose_substitutions). bypass_cache forces re-resolution.",
+        "Run the resolve-only 7-step matching pipeline for one ingredient. Returns a confident match, OR the FULL set of ambiguous candidates (every fulfillable product for the term, relevance-ranked — not truncated, so you can list/compare them all without re-searching), OR unavailable. Never writes the cache (that rides place_order) and never substitutes (that's propose_substitutions). bypass_cache forces re-resolution.",
       inputSchema: {
         ingredient: z.string(),
         context: z.object(matchContextShape).optional(),

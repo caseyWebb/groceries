@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Defines the agent-side orchestration of a menu request end-to-end: the parallel context pre-pass (Kroger flyer/prices, ready-to-eat, preferences, taste, pantry verification), exhaustive named-dish enumeration via `list_recipes` `query`, full proposal assembly (freeform constraints, meal-prep, sale substitutions, ready-to-eat, staples/stockup, sized to `default_cooking_nights`), capture-not-flush to `grocery_list.toml`, the deferral of sequencing to Change 13, and the smoke-test rubric that validates the flow. Behavioral requirements are realized in `AGENT_INSTRUCTIONS.md` and validated conversationally.
+Defines the agent-side orchestration of a menu request end-to-end: the parallel context pre-pass (Kroger flyer/prices, ready-to-eat, preferences, taste, pantry verification), exhaustive named-dish enumeration via `list_recipes` `query`, full proposal assembly (freeform constraints, meal-prep, sale substitutions, ready-to-eat, staples/stockup, sized to `default_cooking_nights`), capture-not-flush to `grocery_list.toml`, and the smoke-test rubric that validates the flow. Behavioral requirements are realized in `AGENT_INSTRUCTIONS.md` and validated conversationally.
 ## Requirements
 ### Requirement: Menu-request context pre-pass
 
@@ -74,15 +74,6 @@ On agreement, the agent SHALL persist the menu's to-buy items to `grocery_list.t
 
 - **WHEN** the pantry already covers everything the agreed menu needs
 - **THEN** the agent says so explicitly, commits any pantry verifications, writes the agreed recipes to `meal_plan.toml`, and adds nothing to `grocery_list.toml`
-
-### Requirement: Sequencing deferred to Change 13
-
-The menu-request flow SHALL tolerate the absence of `suggest_sequencing` and SHALL NOT block on component-based recipe pairing. AGENT_INSTRUCTIONS.md SHALL note that sequencing arrives with Change 13. The agent MAY note an obvious shared-perishable pairing conversationally, but SHALL NOT depend on a sequencing tool call in this change.
-
-#### Scenario: Menu proposes without a sequencing call
-
-- **WHEN** a menu request is made before Change 13 ships
-- **THEN** the agent produces a complete proposal without calling `suggest_sequencing` and without leaving a gap where sequencing would have been
 
 ### Requirement: Menu-generation smoke-test validation
 
@@ -195,7 +186,7 @@ When assembling a menu, the agent SHALL round out each main that is not an alrea
 
 ### Requirement: Side pairing bootstrap when the edge is empty
 
-When a non-standalone main has an empty `pairs_with`, the agent SHALL bootstrap a pairing at plan time: it SHALL search for a suitable savory side, preferring existing corpus recipes (via `list_recipes`), then the RSS discovery pool (`fetch_rss_discoveries`), then a web import (`import_recipe`); it SHALL propose at most two candidate sides in chat; and on the user accepting a side it SHALL ensure the side exists as a recipe (importing it as a `status: draft` recipe via the discovery path when it does not already exist) and SHALL record the pairing by adding the side's slug to the main's `pairs_with` through `update_recipe`. The recorded edge is shared content, so a later menu request for the same main SHALL find the pairing already present and surface it without re-bootstrapping. The bootstrap SHALL select sides by plate fit and SHALL NOT read or reason over the `produces_components` / `uses_components` graph; component-based (bidirectional) batch/sequencing suggestion is out of scope here and deferred to `suggest_sequencing` (Change 13).
+When a non-standalone main has an empty `pairs_with`, the agent SHALL bootstrap a pairing at plan time: it SHALL search for a suitable savory side, preferring existing corpus recipes (via `list_recipes`), then the RSS discovery pool (`fetch_rss_discoveries`), then a web import (`import_recipe`); it SHALL propose at most two candidate sides in chat; and on the user accepting a side it SHALL ensure the side exists as a recipe (importing it as a `status: draft` recipe via the discovery path when it does not already exist) and SHALL record the pairing by adding the side's slug to the main's `pairs_with` through `update_recipe`. The recorded edge is shared content, so a later menu request for the same main SHALL find the pairing already present and surface it without re-bootstrapping. The bootstrap SHALL select sides by plate fit.
 
 #### Scenario: Empty pairs_with bootstraps a side
 

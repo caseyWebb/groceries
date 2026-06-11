@@ -116,9 +116,9 @@ async function listFiles(dir, ext, acc = []) {
   return acc.sort();
 }
 
-// --- recipe + components index ------------------------------------------
+// --- recipe index --------------------------------------------------------
 
-// Returns { recipes, components, errors, warnings }.
+// Returns { recipes, errors, warnings }.
 export async function buildRecipeIndexes(recipesDir) {
   const errors = [];
   const warnings = [];
@@ -218,27 +218,10 @@ export async function buildRecipeIndexes(recipesDir) {
     recipes[slug] = normalizeValue({
       ...objective,
       slug,
-      uses_components: data.uses_components ?? [],
-      produces_components: data.produces_components ?? [],
       pairs_with: Array.isArray(data.pairs_with) ? data.pairs_with : [],
       perishable_ingredients: Array.isArray(data.perishable_ingredients) ? data.perishable_ingredients : [],
       requires_equipment: Array.isArray(data.requires_equipment) ? data.requires_equipment : [],
     });
-  }
-
-  // Components adjacency + uses-must-resolve validation.
-  const components = {};
-  const ensure = (c) => (components[c] ??= { produced_by: [], used_by: [] });
-  for (const [slug, r] of Object.entries(recipes)) {
-    for (const c of r.produces_components) ensure(c).produced_by.push(slug);
-    for (const c of r.uses_components) ensure(c).used_by.push(slug);
-  }
-  for (const [c, edges] of Object.entries(components)) {
-    edges.produced_by.sort();
-    edges.used_by.sort();
-    if (edges.used_by.length && edges.produced_by.length === 0) {
-      errors.push(`unresolved component reference "${c}": used by ${edges.used_by.join(', ')} but no recipe produces it`);
-    }
   }
 
   // pairs_with plating-edge resolution: every referenced slug must be a real recipe.
@@ -250,7 +233,7 @@ export async function buildRecipeIndexes(recipesDir) {
     }
   }
 
-  return { recipes, components, errors, warnings };
+  return { recipes, errors, warnings };
 }
 
 // --- ready-to-eat catalog validation -------------------------------------
@@ -443,7 +426,7 @@ export async function parseCheckToml(root) {
 export async function run({ recipesDir, root = REPO_ROOT } = {}) {
   recipesDir ??= path.join(root, 'recipes');
 
-  const { recipes, components, errors: rErr, warnings } = await buildRecipeIndexes(recipesDir);
+  const { recipes, errors: rErr, warnings } = await buildRecipeIndexes(recipesDir);
   const { parsed, errors: tErr } = await parseCheckToml(root);
 
   // Ready-to-eat is per-tenant — structural-validate every ready_to_eat.toml the
@@ -471,7 +454,7 @@ export async function run({ recipesDir, root = REPO_ROOT } = {}) {
   const { errors: cErr, warnings: cWarn } = validateCookingArtifacts({ recipes, cookingLog, mealPlan });
 
   return {
-    indexes: { recipes, components },
+    indexes: { recipes },
     errors: [...rErr, ...tErr, ...rteErr, ...discErr, ...cErr],
     warnings: [...warnings, ...cWarn],
   };
@@ -479,7 +462,6 @@ export async function run({ recipesDir, root = REPO_ROOT } = {}) {
 
 async function writeIndexes(indexes, outDir) {
   await writeFile(path.join(outDir, 'recipes.json'), stableStringify(indexes.recipes));
-  await writeFile(path.join(outDir, 'components.json'), stableStringify(indexes.components));
 }
 
 async function main() {
@@ -507,8 +489,7 @@ async function main() {
   await stat(outDir); // _indexes/ exists (Change 01 skeleton)
   await writeIndexes(indexes, outDir);
   console.log(
-    `indexes written: ${Object.keys(indexes.recipes).length} recipe(s), ` +
-    `${Object.keys(indexes.components).length} component(s), ${warnings.length} warning(s)`
+    `indexes written: ${Object.keys(indexes.recipes).length} recipe(s), ${warnings.length} warning(s)`
   );
 }
 

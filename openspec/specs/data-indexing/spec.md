@@ -11,7 +11,7 @@ The system SHALL provide `scripts/build-indexes.mjs`, runnable via an npm script
 #### Scenario: Run against the default corpus
 
 - **WHEN** the build script is run with no input-directory override
-- **THEN** it reads from `recipes/` and writes `_indexes/recipes.json` and `_indexes/components.json`
+- **THEN** it reads from `recipes/` and writes `_indexes/recipes.json`
 
 #### Scenario: Run against a fixtures directory
 
@@ -37,15 +37,6 @@ The system SHALL emit `_indexes/recipes.json` (in the shared corpus repository) 
 - **WHEN** the shared corpus is indexed
 - **THEN** every recipe in the shared corpus appears in `recipes.json`, since per-tenant disposition (status) is not part of the shared index
 
-### Requirement: Components index shape
-
-The system SHALL emit `_indexes/components.json` as a JSON object keyed by component slug, where each value lists `produced_by` (recipe slugs whose `produces_components` include that component) and `used_by` (recipe slugs whose `uses_components` include it).
-
-#### Scenario: Adjacency built from component references
-
-- **WHEN** recipe `salmon-with-rice` declares `produces_components: [cooked-rice]` and recipe `kimchi-fried-rice` declares `uses_components: [cooked-rice]`
-- **THEN** `components.json` contains `"cooked-rice": { "produced_by": ["salmon-with-rice"], "used_by": ["kimchi-fried-rice"] }`
-
 ### Requirement: Deterministic output
 
 The system SHALL produce byte-identical index files for unchanged source data across runs and runner environments. Object keys SHALL be sorted, and date-typed frontmatter values (e.g. `last_cooked`, `discovered_at`) SHALL be normalized to `YYYY-MM-DD` strings rather than serialized as datetimes.
@@ -62,10 +53,10 @@ The system SHALL produce byte-identical index files for unchanged source data ac
 
 ### Requirement: Empty corpus handling
 
-The system SHALL handle an empty `recipes/` directory without error, emitting empty index objects.
+The system SHALL handle an empty `recipes/` directory without error, emitting an empty index object.
 
 #### Scenario: Empty recipes directory
 
 - **WHEN** the build script runs and `recipes/` contains no `.md` files
-- **THEN** `recipes.json` and `components.json` are written as `{}` and the script exits successfully
+- **THEN** `recipes.json` is written as `{}` and the script exits successfully
 

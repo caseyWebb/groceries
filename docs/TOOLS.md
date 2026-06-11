@@ -394,24 +394,6 @@ Apply the standing substitution rules to surface acceptable alternatives.
 
 ---
 
-## Sequencing tools
-
-### `suggest_sequencing(seed_recipes)`
-
-> **Status: built in Change 13**, not Change 08. The tool walks the component vocabulary, which is unseeded in the corpus today (≈1/63 recipes declare a component), so it ships with Change 13 (the change that seeds that vocabulary via corpus reconciliation). The menu-request flow tolerates an absent/empty sequencing result until then. Contract below is the target.
-
-Walk `produces_components` / `uses_components` references to find recipe pairings.
-
-**Params:**
-- `seed_recipes` (array of slugs, required)
-
-**Returns:**
-- `{ suggestions: [{ recipe_to_add, reason, shared_component }] }`
-
-**Notes:** Conservative — only returns strong matches. Empty array if nothing fits.
-
----
-
 ## Discovery tools
 
 ### `fetch_rss_discoveries()`
@@ -576,7 +558,7 @@ Speculative menu re-evaluation with hypothetical pantry additions.
 
 ## Commit / atomic operations
 
-> **Re-cut (capture/flush split).** The original monolithic `write_cart_and_commit` is split into two tools that ship in different changes: **`commit_changes`** (repo commit, no cart — this change) and **`place_order`** (the order-time cart flush + SKU-cache write — Change 06b). The repo commit exists for memory's sake; the cart write is a separate, deferred, order-time operation. See `docs/notes/2026-06-09-order-flow-reframe.md`.
+> **Capture/flush split.** Repo persistence and cart placement are two separate tools: **`commit_changes`** (repo commit, no cart) and **`place_order`** (the order-time cart flush + SKU-cache write). The repo commit exists for memory's sake — it happens continuously as intent is captured; the cart write is a separate, order-time flush.
 
 ### `commit_changes(payload)`
 

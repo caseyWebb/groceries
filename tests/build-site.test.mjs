@@ -10,7 +10,6 @@ import {
   loadRecipes,
   orderRecipes,
   renderBody,
-  renderComponents,
   renderRecipePage,
   renderIndexPage,
   facetValues,
@@ -77,37 +76,15 @@ test('renderBody renders extra H2 sections generically (no generator change)', (
   assert.match(sectionsHtml, /<a href="http:\/\/y">x<\/a>/);
 });
 
-// --- components ----------------------------------------------------------
-
-test('renderComponents links producer→consumers and consumer→producer', () => {
-  const components = { 'fresh-pasta': { produced_by: ['pasta'], used_by: ['pasta', 'lasagna'] } };
-  const titleOf = (s) => ({ pasta: 'Pasta', lasagna: 'Lasagna' }[s]);
-  const producer = renderComponents(
-    { slug: 'pasta', produces_components: ['fresh-pasta'], uses_components: [] }, components, titleOf);
-  assert.match(producer, /Makes a component used in: <a href="lasagna.html">Lasagna<\/a>/);
-  assert.ok(!producer.includes('pasta.html')); // self excluded
-
-  const consumer = renderComponents(
-    { slug: 'lasagna', produces_components: [], uses_components: ['fresh-pasta'] }, components, titleOf);
-  assert.match(consumer, /Builds on: <a href="pasta.html">Pasta<\/a>/);
-});
-
-test('renderComponents emits nothing when there are no relationships', () => {
-  assert.equal(
-    renderComponents({ slug: 'x', produces_components: [], uses_components: [] }, {}, () => 'X'),
-    ''
-  );
-});
-
 // --- recipe page surface -------------------------------------------------
 
 test('recipe page hides rating/last_cooked, shows source, handles null time', () => {
   const recipe = {
     slug: 'r', title: 'R', status: 'active', time_total: null, difficulty: 'easy',
     cuisine: 'italian', tags: ['x'], rating: 5, last_cooked: '2025-01-01',
-    source: 'https://example.com/r', content: body, produces_components: [], uses_components: [],
+    source: 'https://example.com/r', content: body,
   };
-  const html = renderRecipePage(recipe, {}, () => 'R');
+  const html = renderRecipePage(recipe);
   assert.ok(!html.includes('rating'));
   assert.ok(!html.includes('last_cooked'));
   assert.ok(!html.includes('2025-01-01'));
@@ -133,7 +110,7 @@ test('buildSite publishes the whole shared corpus, emits page-per-recipe + asset
     'third.md': fm({ title: 'Third' }) + body,
     'fourth.md': fm({ title: 'Fourth' }) + body,
   });
-  const { files, recipeCount } = await buildSite({ recipesDir: dir, componentsPath: '/nonexistent', assetsDir: ASSETS });
+  const { files, recipeCount } = await buildSite({ recipesDir: dir, assetsDir: ASSETS });
   assert.equal(recipeCount, 4);
   for (const slug of ['keep', 'second', 'third', 'fourth']) assert.ok(files.has(`${slug}.html`), slug);
   assert.ok(files.has('index.html') && files.has('style.css') && files.has('sw.js') && files.has('manifest.webmanifest'));
@@ -142,8 +119,8 @@ test('buildSite publishes the whole shared corpus, emits page-per-recipe + asset
 
 test('buildSite output is deterministic across runs', async () => {
   const dir = await tmpRecipes({ 'a.md': fm({ title: 'A', status: 'active' }) + body });
-  const one = await buildSite({ recipesDir: dir, componentsPath: '/nonexistent', assetsDir: ASSETS });
-  const two = await buildSite({ recipesDir: dir, componentsPath: '/nonexistent', assetsDir: ASSETS });
+  const one = await buildSite({ recipesDir: dir, assetsDir: ASSETS });
+  const two = await buildSite({ recipesDir: dir, assetsDir: ASSETS });
   for (const k of one.files.keys()) assert.equal(one.files.get(k), two.files.get(k), `file ${k} differs`);
   await rm(dir, { recursive: true, force: true });
 });

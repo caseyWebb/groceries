@@ -18,8 +18,6 @@ discovered_at: null
 discovery_source: null
 ingredients_key: [kimchi, rice, egg, scallion]
 meal_preppable: false
-uses_components: [cooked-rice]
-produces_components: []
 source: null
 ---
 

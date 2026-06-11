@@ -3,9 +3,7 @@
 ## Purpose
 
 Defines the static, zero-JavaScript-baseline recipe site generated from the `recipes/*.md` corpus: how the generator produces deterministic `site/` output, how recipes are rendered and indexed, the pure-CSS faceted filtering and checkable-ingredient interactions, component cross-linking, accessibility requirements, and host-neutral GitHub Pages deployment.
-
 ## Requirements
-
 ### Requirement: Static site generation
 
 The system SHALL provide a generator (`scripts/build-site.mjs`) that reads `recipes/*.md` and emits a static `site/` directory containing one index page, one page per recipe, a single stylesheet, and client assets. The generator SHALL use `gray-matter` for frontmatter and `marked` for markdown body rendering, SHALL introduce no client framework or bundler, and SHALL produce deterministic output. The generated `site/` SHALL NOT be committed to the repository.
@@ -71,20 +69,6 @@ Each ingredient on a recipe page SHALL be a checkable item that visibly marks as
 - **WHEN** the user toggles an ingredient's checkbox
 - **THEN** that ingredient is visually marked as completed with no JavaScript involved
 
-### Requirement: Component cross-links
-
-Where `_indexes/components.json` records a component relationship, recipe pages SHALL render bidirectional links: a recipe that produces a component SHALL link to the recipes that use it, and a recipe that uses a component SHALL link to the recipe that produces it. Recipes with no component relationships SHALL render no component link section.
-
-#### Scenario: Producer links to consumers
-
-- **WHEN** a recipe produces a component used by other recipes
-- **THEN** its page links to each consuming recipe
-
-#### Scenario: No stub when components are absent
-
-- **WHEN** a recipe has no component relationships
-- **THEN** its page renders no empty component-link section
-
 ### Requirement: Recipe page content and display surface
 
 Recipe pages SHALL display the title, time, difficulty, cuisine, tags, the rendered body, and a `source` attribution link when present. Recipe cards on the index SHALL display title, time, difficulty, and tags. The site SHALL NOT display `rating` or `last_cooked`. Missing or null optional fields (e.g. a null `time_total`) SHALL be handled gracefully without error.
@@ -135,3 +119,4 @@ The system SHALL provide a GitHub Pages deploy workflow (`.github/workflows/buil
 
 - **WHEN** the built `site/` is served from a `/<repo>/` subpath
 - **THEN** all pages, links, and assets resolve correctly via relative URLs
+
