@@ -33,17 +33,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       # The caller's repo (the data repo) — for the operator's wrangler.jsonc.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # This code repo — the Worker source + build deps. Into _code/ so nothing is
       # ever committed back to the data repo.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: caseyWebb/groceries-agent
           ref: ${{ inputs.code_ref }}
           path: _code
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 

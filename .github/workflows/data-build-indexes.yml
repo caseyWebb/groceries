@@ -20,17 +20,17 @@ jobs:
       contents: write # commit the regenerated _indexes back to the data repo
     steps:
       # The caller's repo (the data repo) — its recipes/ are the build input.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       # This code repo — for the build scripts + their deps. Goes in _code/ so it
       # is never committed to the data repo.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           repository: caseyWebb/groceries-agent
           ref: ${{ inputs.code_ref }}
           path: _code
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: "22"
 
