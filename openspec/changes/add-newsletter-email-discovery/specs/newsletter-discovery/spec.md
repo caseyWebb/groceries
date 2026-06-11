@@ -16,7 +16,12 @@ The handler SHALL accept a message only when it is both authenticated and from a
 - its `From` matches a trusted **member** AND DKIM aligns to that member's domain (manual forward, re-signed by the member's provider), or
 - it is SPF-aligned to a known member's forwarding relay (auto-forward rule whose original DKIM broke in the hop).
 
-Any message that satisfies none of these SHALL be dropped silently (no inbox write, no error surfaced to a user). Authentication results SHALL be taken from Cloudflare's reported DKIM/SPF/DMARC verdicts, not inferred from header text.
+A message that satisfies none of these SHALL NOT be written to the inbox. Instead of a silent drop, the handler SHALL reject it in-session (`setReject`, an SMTP 550) with a human-readable reason so the sender receives a bounce — a known-but-unaligned address (its `From` is allowlisted but DKIM did not align) SHALL get a detailed reason; an unknown sender SHALL get a terse one. (`setReject` is backscatter-safe: a synchronous SMTP rejection, not a new outbound email.) Authentication results SHALL be taken from Cloudflare's reported DKIM/SPF/DMARC verdicts, not inferred from header text.
+
+#### Scenario: A failed message bounces with a reason instead of vanishing
+
+- **WHEN** a message is not accepted by the gate (e.g. an allowlisted address whose DKIM did not align)
+- **THEN** the handler rejects it in-session with a reason and writes nothing to the inbox, so the sender receives a bounce explaining why
 
 #### Scenario: Auto-forwarded newsletter with surviving DKIM is accepted
 
@@ -78,6 +83,20 @@ At inbox write-time the handler SHALL drop any candidate whose canonical URL alr
 
 - **WHEN** a candidate's canonical URL equals the `source:` of a recipe already in the corpus
 - **THEN** that candidate is omitted from the inbox write
+
+### Requirement: Senders are notified of failures but not of routine success
+
+The handler SHALL `setReject` (bounce) a message that the gate rejects, and an accepted message from which **no** recipe links could be extracted. It SHALL NOT reject a message that was accepted and yielded at least one extractable link — including the case where every candidate was a duplicate already in the corpus or inbox (that is a routine success, not a failure, so forwarding a newsletter of already-known recipes does not bounce). A processing error SHALL also reject with a generic reason rather than being swallowed.
+
+#### Scenario: Accepted message with no recipe links bounces
+
+- **WHEN** an accepted message contains no extractable content links
+- **THEN** the handler rejects it with a "no recipe links found" reason
+
+#### Scenario: All-duplicate forward is accepted silently
+
+- **WHEN** an accepted message's candidates are all already in the corpus or inbox
+- **THEN** the handler writes nothing new and does NOT reject (no bounce)
 
 ### Requirement: read_discovery_inbox returns the pooled inbox candidates
 

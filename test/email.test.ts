@@ -3,6 +3,7 @@ import {
   parseAllowlist,
   parseAuthResults,
   gateMessage,
+  rejectReasonFor,
   extractAnchors,
   decodeTrackerUrl,
   isLikelyContentLink,
@@ -71,23 +72,48 @@ describe("gateMessage", () => {
     expect(r).toMatchObject({ accepted: true, reason: "member_dkim" });
   });
 
-  it("drops an allowlisted sender whose DKIM is not aligned", () => {
+  it("drops an allowlisted sender whose DKIM is not aligned, as auth_unaligned", () => {
     const r = gateMessage({ from: "news@seriouseats.com", allowlist, auth: pass("mailchimp.com") });
-    expect(r.accepted).toBe(false);
+    expect(r).toMatchObject({ accepted: false, reason: "auth_unaligned" });
   });
 
-  it("drops mail from a non-allowlisted address even with passing DKIM", () => {
+  it("drops mail from a non-allowlisted address as not_allowlisted (even with passing DKIM)", () => {
     const r = gateMessage({ from: "spam@nowhere.com", allowlist, auth: pass("nowhere.com") });
-    expect(r.accepted).toBe(false);
+    expect(r).toMatchObject({ accepted: false, reason: "not_allowlisted" });
   });
 
-  it("drops an allowlisted member when DKIM did not pass (relay-SPF path deferred)", () => {
+  it("drops an allowlisted member when DKIM did not pass, as auth_unaligned (relay-SPF deferred)", () => {
     const r = gateMessage({
       from: "alice@example.com",
       allowlist,
       auth: { dkim: false, spf: true, dmarc: false, dkimDomains: [] },
     });
-    expect(r.accepted).toBe(false);
+    expect(r).toMatchObject({ accepted: false, reason: "auth_unaligned" });
+  });
+});
+
+describe("rejectReasonFor", () => {
+  it("returns null for a successful index (links found)", () => {
+    expect(rejectReasonFor({ accepted: true, reason: "member_dkim", found: 2, written: 2 })).toBeNull();
+  });
+
+  it("returns null when accepted but all candidates were duplicates (not a failure)", () => {
+    expect(rejectReasonFor({ accepted: true, reason: "member_dkim", found: 3, written: 0 })).toBeNull();
+  });
+
+  it("rejects an accepted message with no recipe links found", () => {
+    const r = rejectReasonFor({ accepted: true, reason: "member_dkim", found: 0, written: 0 });
+    expect(r).toMatch(/no recipe links/i);
+  });
+
+  it("gives a detailed DKIM-alignment reason to a known-but-unaligned sender", () => {
+    const r = rejectReasonFor({ accepted: false, reason: "auth_unaligned", found: 0, written: 0 });
+    expect(r).toMatch(/DKIM/i);
+  });
+
+  it("gives a terse reason to a non-allowlisted sender", () => {
+    const r = rejectReasonFor({ accepted: false, reason: "not_allowlisted", found: 0, written: 0 });
+    expect(r).toMatch(/not an allowlisted/i);
   });
 });
 

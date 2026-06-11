@@ -42,6 +42,8 @@ export interface InboundMessage {
   readonly to: string;
   readonly headers: Headers;
   readonly raw: ReadableStream<Uint8Array>;
+  /** Reject the message in-session (SMTP 550) so the sender gets a bounce with `reason`. */
+  setReject(reason: string): void;
 }
 
 // --- Allowlist (discovery_sources.toml) -------------------------------------
@@ -196,17 +198,28 @@ function domainOf(address: string): string {
  * DKIM broke in the hop) — is DEFERRED: it can't be validated without a real
  * Cloudflare verdict to test against. Everything else is dropped silently.
  */
+export type GateReason =
+  | "sender_dkim"
+  | "member_dkim"
+  | "auth_unaligned"
+  | "not_allowlisted";
+
 export function gateMessage(opts: {
   from: string;
   allowlist: Allowlist;
   auth: AuthVerdicts;
-}): { accepted: boolean; reason: string } {
+}): { accepted: boolean; reason: GateReason } {
   const from = opts.from.trim().toLowerCase();
   const aligned = opts.auth.dkim && opts.auth.dkimDomains.includes(domainOf(from));
   if (aligned && opts.allowlist.senders.has(from)) return { accepted: true, reason: "sender_dkim" };
   if (aligned && opts.allowlist.members.has(from)) return { accepted: true, reason: "member_dkim" };
+  // Known address but DKIM didn't align — distinct from a stranger so we can give
+  // the trusted sender a detailed bounce (vs. a terse one to unknown senders).
   // TODO(relay-spf): path (c) once a live forwarded message's auth headers exist to test against.
-  return { accepted: false, reason: "not_allowlisted_or_unauthenticated" };
+  if (opts.allowlist.senders.has(from) || opts.allowlist.members.has(from)) {
+    return { accepted: false, reason: "auth_unaligned" };
+  }
+  return { accepted: false, reason: "not_allowlisted" };
 }
 
 // --- Link extraction + tracker unwrapping ------------------------------------
@@ -365,15 +378,50 @@ async function followRedirect(url: string): Promise<string> {
   return current;
 }
 
+export interface EmailResult {
+  accepted: boolean;
+  reason: GateReason;
+  /** Content links extracted from the body (before corpus/inbox dedup). */
+  found: number;
+  /** New candidates actually written to the inbox (0 ⇒ none new, e.g. all duplicates). */
+  written: number;
+}
+
+/**
+ * Map a processing result to a human SMTP-reject reason, or `null` when the
+ * message should be accepted silently. The handler `setReject`s with this so the
+ * sender gets an inline bounce explaining the failure (debuggable forwarding).
+ * Accepted-with-duplicates is a SUCCESS (nothing new, but not a failure) — only a
+ * genuine failure rejects, so forwarding a newsletter of known recipes won't bounce.
+ */
+export function rejectReasonFor(result: EmailResult): string | null {
+  if (result.accepted) {
+    if (result.found === 0) {
+      return "Message accepted, but no recipe links were found in it to index.";
+    }
+    return null; // links found (written ≥ 0): success, even if all were duplicates
+  }
+  switch (result.reason) {
+    case "auth_unaligned":
+      return (
+        "Your address is on the allowlist, but the message failed DKIM alignment, " +
+        "so it could not be trusted. Auto-forward rules often break the original " +
+        "DKIM signature; that relay fallback is not enabled yet."
+      );
+    case "not_allowlisted":
+      return "Sender is not an allowlisted discovery source.";
+    default:
+      return "Message could not be processed.";
+  }
+}
+
 /**
  * The Worker email() handler. Authenticate + gate, parse the MIME, unwrap links,
  * extract recipe candidates, and append them to the shared inbox in one commit.
- * Silent on drop (no bounce, no error) per the security posture.
+ * Returns a structured result; the caller `setReject`s a failure (see
+ * `rejectReasonFor`) so the sender gets a bounce instead of a silent drop.
  */
-export async function handleInboundEmail(
-  message: InboundMessage,
-  env: Env,
-): Promise<{ accepted: boolean; reason: string; written: number }> {
+export async function handleInboundEmail(message: InboundMessage, env: Env): Promise<EmailResult> {
   const auth = createInstallationAuth(
     env.GITHUB_APP_ID,
     env.GITHUB_APP_PRIVATE_KEY,
@@ -388,7 +436,7 @@ export async function handleInboundEmail(
   const fromAddress = (email.from?.address ?? message.from ?? "").toLowerCase();
 
   const gate = gateMessage({ from: fromAddress, allowlist, auth: verdicts });
-  if (!gate.accepted) return { ...gate, written: 0 };
+  if (!gate.accepted) return { ...gate, found: 0, written: 0 };
 
   // Resolve each anchor to its clean canonical destination, then keep content links.
   const anchors = extractAnchors(email.html, email.text);
@@ -403,7 +451,7 @@ export async function handleInboundEmail(
     seenLocal.add(canonical);
     resolved.push({ title: a.title, url: canonical });
   }
-  if (resolved.length === 0) return { ...gate, written: 0 };
+  if (resolved.length === 0) return { ...gate, found: 0, written: 0 };
 
   const [indexRaw, inboxRaw] = await Promise.all([
     readOptional(gh, RECIPE_INDEX),
@@ -423,10 +471,10 @@ export async function handleInboundEmail(
   };
 
   const { text, written } = appendInboxEntry(inboxRaw, entry, seen);
-  if (written === 0) return { ...gate, written: 0 };
+  if (written === 0) return { ...gate, found: resolved.length, written: 0 };
 
   await commitFiles(gh, [{ path: INBOX_PATH, content: text }], `discovery: ${written} candidate(s) from ${fromAddress}`);
-  return { ...gate, written };
+  return { ...gate, found: resolved.length, written };
 }
 
 /** Best-effort calendar date (YYYY-MM-DD) from the message `Date` header; UTC, falls back to empty. */

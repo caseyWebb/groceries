@@ -13,7 +13,7 @@ import { buildServer } from "./tools.js";
 import { resolveTenant, directoryFromEnv } from "./tenant.js";
 import { handleOAuth } from "./oauth.js";
 import { handleAuthorize } from "./authorize.js";
-import { handleInboundEmail, type InboundMessage } from "./email.js";
+import { handleInboundEmail, rejectReasonFor, type InboundMessage } from "./email.js";
 
 /**
  * The gated MCP API. Only reached for `/mcp` requests the provider has already
@@ -69,18 +69,25 @@ const oauthProvider = new OAuthProvider({
  * `email()` handler in the SAME Worker for inbound newsletter discovery — Cloudflare
  * Email Routing delivers forwarded recipe newsletters here. It runs without an OAuth
  * session (mail carries no token): discovery sources are shared, so the handler reads
- * the shared allowlist and writes the shared inbox directly. Failures are swallowed —
- * a thrown email handler would bounce mail; the posture is "drop silently".
+ * the shared allowlist and writes the shared inbox directly.
+ *
+ * We AWAIT the handler (not waitUntil) so we can `setReject` a failure in-session:
+ * the sender gets a bounce with the reason (debuggable forwarding) instead of a
+ * silent drop. A genuine success — or an accepted message whose links were all
+ * duplicates — is taken silently (`rejectReasonFor` returns null).
  */
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     return oauthProvider.fetch(request, env, ctx);
   },
-  async email(message: InboundMessage, env: Env, ctx: ExecutionContext): Promise<void> {
-    ctx.waitUntil(
-      handleInboundEmail(message, env).catch((e) => {
-        console.error("inbound email handler failed:", e instanceof Error ? e.message : String(e));
-      }),
-    );
+  async email(message: InboundMessage, env: Env): Promise<void> {
+    let reason: string | null;
+    try {
+      reason = rejectReasonFor(await handleInboundEmail(message, env));
+    } catch (e) {
+      console.error("inbound email handler failed:", e instanceof Error ? e.message : String(e));
+      reason = "A processing error occurred while indexing the message.";
+    }
+    if (reason) message.setReject(reason);
   },
 };
