@@ -1,0 +1,56 @@
+# Reusable workflow: revoke a member — delete their allowlist entry + invite code
+# from the operator's TENANT_KV, so they can no longer authorize and their issued
+# OAuth token stops resolving. A DATA repo (private) calls this from a thin
+# workflow_dispatch caller — see that repo's .github/workflows/revoke.yml. Run it
+# from the data repo (private), never the public code repo/fork.
+#
+# KV-only: no checkout, no GitHub App key, no wrangler.jsonc. The namespace is
+# addressed by id (tenant_kv_id). To also delete their data, remove
+# users/<username>/ from the data repo manually (its web UI).
+name: data-revoke
+
+on:
+  workflow_call:
+    inputs:
+      username:
+        description: "Username to revoke."
+        required: true
+        type: string
+      invite_code:
+        description: "Their invite code to delete (optional — only needed if it was never used/rotated)."
+        required: false
+        type: string
+      tenant_kv_id:
+        description: "The TENANT_KV namespace id (from wrangler.jsonc / the Cloudflare dashboard)."
+        required: true
+        type: string
+      cloudflare_account_id:
+        description: "Cloudflare account id. Only needed if the API token spans multiple accounts."
+        required: false
+        type: string
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare token with Workers + KV edit."
+        required: true
+
+jobs:
+  revoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove from KV (allowlist + invite)
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ inputs.cloudflare_account_id }}
+          KVID: ${{ inputs.tenant_kv_id }}
+          U: ${{ inputs.username }}
+          CODE: ${{ inputs.invite_code }}
+        run: |
+          npx --yes wrangler kv key delete --namespace-id="$KVID" --remote "tenant:${U}" || true
+          if [ -n "$CODE" ]; then
+            npx --yes wrangler kv key delete --namespace-id="$KVID" --remote "invite:${CODE}" || true
+          fi
+
+      - name: Summary
+        env:
+          U: ${{ inputs.username }}
+        run: echo "Revoked \`${U}\` — KV allowlist + invite removed; their token no longer resolves. Delete \`users/${U}/\` from the data repo manually if you want their data gone too." >> "$GITHUB_STEP_SUMMARY"

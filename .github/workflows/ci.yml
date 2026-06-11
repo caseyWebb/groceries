@@ -1,0 +1,36 @@
+name: CI
+
+# Upstream quality gate for the PUBLIC code repo: typecheck + both test suites on
+# every push/PR. NO secrets and NO deploy — deployment is an operator action run
+# from each operator's PRIVATE data repo (see .github/workflows/data-deploy.yml,
+# the reusable workflow their thin deploy.yml caller invokes). Keeping this repo
+# secret-free is the point of the consolidation: the data repo is the single
+# control plane.
+
+on:
+  push:
+    branches: [main]
+  pull_request: {}
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Test (Worker)
+        run: npm test
+
+      - name: Test (build tooling)
+        run: npm run test:tooling

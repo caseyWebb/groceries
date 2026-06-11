@@ -1,0 +1,69 @@
+# Reusable workflow: deploy the grocery-mcp Worker. A DATA repo (PRIVATE) calls
+# this from a thin workflow_dispatch caller — see that repo's .github/workflows/
+# deploy.yml. The data repo is the operator's single control plane: it holds the
+# only Actions secret (CLOUDFLARE_API_TOKEN) and the operator's wrangler config.
+# The public code repo holds NO secrets and is never forked for ops.
+#
+# Source vs config: the Worker SOURCE comes from this code repo (pinned by
+# code_ref — DRY, updates propagate via @main); the operator's wrangler.jsonc
+# (their KV ids, DATA_* coords, App id, worker name/route) lives in THEIR data repo
+# and is overlaid onto the source before deploy. The Worker's runtime secrets
+# (GitHub App key, Kroger creds) are set once via `wrangler secret put` and persist
+# across deploys — never here.
+name: data-deploy
+
+on:
+  workflow_call:
+    inputs:
+      code_ref:
+        description: Ref of caseyWebb/groceries-agent to deploy the Worker source from.
+        type: string
+        default: main
+      config_path:
+        description: Path, in the DATA repo, to the operator's wrangler.jsonc.
+        type: string
+        default: wrangler.jsonc
+    secrets:
+      CLOUDFLARE_API_TOKEN:
+        description: "Cloudflare token with Workers + KV edit."
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      # The caller's repo (the data repo) — for the operator's wrangler.jsonc.
+      - uses: actions/checkout@v4
+
+      # This code repo — the Worker source + build deps. Into _code/ so nothing is
+      # ever committed back to the data repo.
+      - uses: actions/checkout@v4
+        with:
+          repository: caseyWebb/groceries-agent
+          ref: ${{ inputs.code_ref }}
+          path: _code
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Overlay the operator's wrangler config onto the source
+        run: cp "${{ inputs.config_path }}" _code/wrangler.jsonc
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: _code
+
+      - name: Typecheck
+        run: npm run typecheck
+        working-directory: _code
+
+      - name: Test
+        run: npm test
+        working-directory: _code
+
+      - name: Deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          workingDirectory: _code
