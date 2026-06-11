@@ -129,7 +129,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
   function getPreferences(): Promise<Record<string, unknown>> {
     if (!prefsPromise) {
       prefsPromise = (async () => {
-        const text = await readFile(gh, "preferences.toml", "not_found", "preferences.toml is missing");
+        const text = await readFile(gh, "preferences.toml", "not_found", "no preferences are set up");
         return parseToml(text, "preferences.toml");
       })();
     }
@@ -147,7 +147,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
         if (!label) {
           throw new ToolError(
             "not_found",
-            "preferences.toml [stores].preferred_location is not set; cannot price Kroger products",
+            "no preferred store location is set; cannot price Kroger products",
           );
         }
         return kroger.resolveLocationId(label);
@@ -221,7 +221,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
 
   /** Read and parse pantry items; empty/comment-only pantry yields []. */
   async function getPantryItems(): Promise<PantryItem[]> {
-    const text = await readFile(gh, "pantry.toml", "not_found", "pantry.toml is missing");
+    const text = await readFile(gh, "pantry.toml", "not_found", "no pantry is set up");
     const parsed = parseToml(text, "pantry.toml");
     return Array.isArray(parsed.items) ? (parsed.items as PantryItem[]) : [];
   }
@@ -253,7 +253,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     const { body } = parseMarkdown(text, `recipes/${slug}.md`);
     const lines = extractIngredientLines(body);
     if (lines === null) {
-      throw new ToolError("malformed_data", `recipes/${slug}.md has no '## Ingredients' section`, { slug });
+      throw new ToolError("malformed_data", `recipe ${slug} has no '## Ingredients' section`, { slug });
     }
     return lines.map((line) => parseRecipeIngredient(line, aliases));
   }
@@ -298,7 +298,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
             sharedGh,
             "_indexes/recipes.json",
             "index_unavailable",
-            "_indexes/recipes.json is missing",
+            "the recipe index is unavailable",
           ),
           getOverlay(),
           getLastCookedMap(),
@@ -308,7 +308,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
           index = JSON.parse(raw) as RecipeIndex;
         } catch (e) {
           const message = e instanceof Error ? e.message : String(e);
-          throw new ToolError("index_unavailable", `_indexes/recipes.json is malformed: ${message}`);
+          throw new ToolError("index_unavailable", `the recipe index is malformed: ${message}`);
         }
         // Join each shared entry with the caller's overlay (rating/status) and
         // cooking-log-derived last_cooked before filtering, so filters see the
@@ -350,7 +350,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "read_pantry",
     {
       description:
-        "Read pantry items. Supports category and prepared_only filters. stale_only is not yet supported (needs ingredients.toml).",
+        "Read pantry items. Supports category and prepared_only filters. stale_only is not yet supported (needs shelf-life data).",
       inputSchema: { filter: z.object(pantryFilterShape).optional() },
     },
     ({ filter }) =>
@@ -358,10 +358,10 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
         if (filter?.stale_only) {
           throw new ToolError(
             "unsupported",
-            "stale_only requires shelf-life data (ingredients.toml), introduced in a later change.",
+            "stale_only requires shelf-life data, introduced in a later change.",
           );
         }
-        const text = await readFile(gh, "pantry.toml", "not_found", "pantry.toml is missing");
+        const text = await readFile(gh, "pantry.toml", "not_found", "no pantry is set up");
         const parsed = parseToml(text, "pantry.toml");
         let items = Array.isArray(parsed.items) ? (parsed.items as Record<string, unknown>[]) : [];
         if (filter?.category !== undefined) {
@@ -377,7 +377,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
   server.registerTool(
     "read_preferences",
     {
-      description: "Return the parsed contents of preferences.toml.",
+      description: "Return the user's parsed preferences.",
       inputSchema: {},
     },
     () =>
@@ -386,7 +386,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
           gh,
           "preferences.toml",
           "not_found",
-          "preferences.toml is missing",
+          "no preferences are set up",
         );
         return parseToml(text, "preferences.toml");
       }),
@@ -395,12 +395,12 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
   server.registerTool(
     "read_taste",
     {
-      description: "Return the raw markdown of taste.md (the user's taste profile narrative).",
+      description: "Return the user's taste profile narrative (markdown).",
       inputSchema: {},
     },
     () =>
       runTool(async () => {
-        const content = await readFile(gh, "taste.md", "not_found", "taste.md is missing");
+        const content = await readFile(gh, "taste.md", "not_found", "no taste profile is set up");
         return { content };
       }),
   );
@@ -408,7 +408,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
   server.registerTool(
     "read_diet_principles",
     {
-      description: "Return the raw markdown of diet_principles.md (variety rules narrative).",
+      description: "Return the user's diet-principles narrative (variety rules, markdown).",
       inputSchema: {},
     },
     () =>
@@ -417,7 +417,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
           gh,
           "diet_principles.md",
           "not_found",
-          "diet_principles.md is missing",
+          "no diet principles are set up",
         );
         return { content };
       }),
@@ -448,7 +448,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "kroger_flyer",
     {
       description:
-        "Synthesized sale scan (the public API has no flyer/circular endpoint). Scans precise context terms (passed plus stockup/substitution candidates) and broad curated terms from flyer_terms.toml, keeps only MEANINGFUL discounts (on sale AND at least 5% off — so neither Kroger's promo==regular non-sale echo nor penny/near-zero markdowns leak through), dedupes by productId. Explicitly non-exhaustive: each term returns a relevance-ranked page, not a discount-sorted one.",
+        "Synthesized sale scan (the public API has no flyer/circular endpoint). Scans precise context terms (passed plus stockup/substitution candidates) and broad curated category terms, keeps only MEANINGFUL discounts (on sale AND at least 5% off — so neither Kroger's promo==regular non-sale echo nor penny/near-zero markdowns leak through), dedupes by productId. Explicitly non-exhaustive: each term returns a relevance-ranked page, not a discount-sorted one.",
       inputSchema: { filter: z.object(flyerFilterShape).optional() },
     },
     ({ filter }) =>
@@ -526,7 +526,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "ready_to_eat_available",
     {
       description:
-        "Cross-reference the caller's personal ready_to_eat.toml catalog against Kroger availability. Each available catalog item carries the FULL list of fulfillable matching products (relevance-ranked, with price + on-sale + curbside/delivery) so you can pick the right/cheapest one. 'Available' means fulfillable via curbside or delivery — the public API exposes no live in-store stock. An empty or absent catalog returns empty lists.",
+        "Cross-reference the caller's personal ready-to-eat catalog against Kroger availability. Each available catalog item carries the FULL list of fulfillable matching products (relevance-ranked, with price + on-sale + curbside/delivery) so you can pick the right/cheapest one. 'Available' means fulfillable via curbside or delivery — the public API exposes no live in-store stock. An empty or absent catalog returns empty lists.",
       inputSchema: {},
     },
     () =>
@@ -628,7 +628,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "propose_substitutions",
     {
       description:
-        "Apply substitutions.toml rules deterministically, returning { substitutes, unacceptable } for the agent to present for confirmation (never auto-applies). mode 'inventory' surfaces rule-acceptable substitutes present in the pantry; mode 'sale' fetches Kroger prices internally and surfaces rule-acceptable substitutes on sale. Empty result when no rule matches (dormant until substitutions.toml is seeded).",
+        "Apply the standing substitution rules deterministically, returning { substitutes, unacceptable } for the agent to present for confirmation (never auto-applies). mode 'inventory' surfaces rule-acceptable substitutes present in the pantry; mode 'sale' fetches Kroger prices internally and surfaces rule-acceptable substitutes on sale. Empty result when no rule matches (dormant until substitution rules are seeded).",
       inputSchema: { ingredient: z.string(), mode: z.enum(["inventory", "sale"]) },
     },
     ({ ingredient, mode }) =>

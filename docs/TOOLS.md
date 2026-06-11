@@ -76,7 +76,7 @@ Update recipe frontmatter fields. Use for `last_cooked`, `rating`, `status` tran
 
 ### `create_recipe(frontmatter, body, slug?)`
 
-Write a **new** recipe markdown file (`recipes/<slug>.md`) to the **shared corpus** (the data-repo root, read by everyone), from agent-assembled frontmatter + body, as **one solo commit**. The slug derives from the title unless `slug` is supplied. The body MUST contain `## Ingredients` and `## Instructions` H2 sections (guarded — a body missing them is rejected, never committed). A recipe is shared and single-source: if the `source` URL is already in the corpus, the write is refused (`already_exists`) so the existing recipe is reused, not duplicated.
+Write a **new** recipe to the **shared corpus** (the data-repo root, read by everyone), from agent-assembled frontmatter + body, as **one solo commit**. The slug derives from the title unless `slug` is supplied. The body MUST contain `## Ingredients` and `## Instructions` H2 sections (guarded — a body missing them is rejected, never committed). A recipe is shared and single-source: if the `source` URL is already in the corpus, the write is refused (`already_exists`) so the existing recipe is reused, not duplicated.
 
 **Params:**
 - `frontmatter` (object, required) — full recipe frontmatter. `status` defaults to `draft` if omitted, so discovery imports never land active by accident; discovery should also set `discovered_at` and `discovery_source`.
@@ -260,7 +260,7 @@ Remove an item by name.
 
 ### `kroger_flyer(filter)`
 
-Synthesized sale scan — the public API has **no** flyer/circular endpoint, so this searches terms and keeps products with a **meaningful discount** — on sale **and** at least **5% off** (`regular − promo ≥ 5% of regular`) — deduped by `productId`. This excludes both Kroger's `promo == regular` non-sale echo (`savings: 0`) and penny / near-zero markdowns (`savings: 0.01`), which were noise. The matcher still counts any real promo in its tiebreak; this stricter floor is flyer-only. Scans **precise** terms (caller-passed plus stockup/substitution candidates) and **broad** curated terms from `flyer_terms.toml`. Explicitly **non-exhaustive**: each term returns a relevance-ranked page (no sort-by-discount), so it samples the head of each category.
+Synthesized sale scan — the public API has **no** flyer/circular endpoint, so this searches terms and keeps products with a **meaningful discount** — on sale **and** at least **5% off** (`regular − promo ≥ 5% of regular`) — deduped by `productId`. This excludes both Kroger's `promo == regular` non-sale echo (`savings: 0`) and penny / near-zero markdowns (`savings: 0.01`), which were noise. The matcher still counts any real promo in its tiebreak; this stricter floor is flyer-only. Scans **precise** terms (caller-passed plus stockup/substitution candidates) and **broad** curated category terms. Explicitly **non-exhaustive**: each term returns a relevance-ranked page (no sort-by-discount), so it samples the head of each category.
 
 **Params:**
 - `filter` (object, optional): `{ terms?, against_stockup?, against_substitutions? }`
@@ -348,7 +348,7 @@ Deterministic price-per-unit comparison, used by the matching tiebreaker and whe
 
 ### `ready_to_eat_available()`
 
-Cross-reference the **caller's own** `users/<id>/ready_to_eat.toml` catalog against current Kroger availability. "Available" means fulfillable via **curbside or delivery** at the preferred location (`fulfillment.curbside || fulfillment.delivery`) — the public Products API exposes no live in-store stock level. Each available item carries the **full list of fulfillable matching products** (relevance-ranked) so the agent can pick the right/cheapest one. An empty or absent catalog returns empty lists.
+Cross-reference the **caller's own** personal ready-to-eat catalog against current Kroger availability. "Available" means fulfillable via **curbside or delivery** at the preferred location (`fulfillment.curbside || fulfillment.delivery`) — the public Products API exposes no live in-store stock level. Each available item carries the **full list of fulfillable matching products** (relevance-ranked) so the agent can pick the right/cheapest one. An empty or absent catalog returns empty lists.
 
 **Returns:**
 - `{ available: { breakfast: [...{ name, slug, meal, products: [{ sku, brand, description, size, price, on_sale, available }] }], lunch: [...], dinner: [...] }, unavailable: [...{ name, slug, meal, catalog_sku }] }`
@@ -359,7 +359,7 @@ Cross-reference the **caller's own** `users/<id>/ready_to_eat.toml` catalog agai
 
 ### `propose_substitutions(ingredient, mode)`
 
-Apply `substitutions.toml` rules to surface acceptable alternatives.
+Apply the standing substitution rules to surface acceptable alternatives.
 
 **Params:**
 - `ingredient` (string, required)
@@ -394,7 +394,7 @@ Walk `produces_components` / `uses_components` references to find recipe pairing
 
 ### `fetch_rss_discoveries()`
 
-Fetch all feeds in `feeds.toml` and return a **deduped candidate pool** — deduped against recipes already in the corpus (by canonicalized `source:` URL) and with tracking query strings stripped. **No taste score and no ranking**: the agent judges taste fit against the taste profile and picks the 1–2 worth importing (then `import_recipe` + `create_recipe` each).
+Fetch the user's configured discovery feeds and return a **deduped candidate pool** — deduped against recipes already in the corpus (by canonicalized `source:` URL) and with tracking query strings stripped. **No taste score and no ranking**: the agent judges taste fit against the taste profile and picks the 1–2 worth importing (then `import_recipe` + `create_recipe` each).
 
 **Returns:**
 - `{ candidates: [{ url, title, source, feed_weight, summary }], skipped?: [{ feed, reason }] }` — `source` is the feed name; `feed_weight` is the feed's configured trust hint (passed through, not used to rank); unreachable feeds are reported in `skipped`, not fatal.
@@ -403,7 +403,7 @@ Fetch all feeds in `feeds.toml` and return a **deduped candidate pool** — dedu
 
 ### `add_draft_ready_to_eat(items)`
 
-Append ready-to-eat items to the **caller's own** `users/<id>/ready_to_eat.toml`. Each item is given a generated `slug` (unique within the file). Defaults to `draft`; pass `status: "active"` for an item the member explicitly accepts (the onboarding path).
+Append ready-to-eat items to the **caller's own** personal ready-to-eat catalog. Each item is given a generated `slug` (unique within the catalog). Defaults to `draft`; pass `status: "active"` for an item the member explicitly accepts (the onboarding path).
 
 **Params:**
 - `items` (array): `[{ meal, name, status?, category?, source?, brand?, notes? }]` — `meal` is `breakfast | lunch | dinner`; `status` is `draft` (default) | `active`
@@ -431,15 +431,15 @@ Disposition or otherwise update a ready-to-eat item in the caller's catalog, add
 
 ### `read_preferences()`
 
-Return parsed `preferences.toml`.
+Return the user's parsed preferences.
 
 ### `read_taste()`
 
-Return contents of `taste.md`.
+Return the user's taste profile narrative (markdown).
 
 ### `read_diet_principles()`
 
-Return contents of `diet_principles.md`.
+Return the user's diet-principles narrative (variety rules, markdown).
 
 ### `update_preferences(content)` / `update_taste(content)` / `update_diet_principles(content)` / `update_substitutions(content)` / `update_aliases(content)`
 
@@ -457,7 +457,7 @@ Write to user-curated files. **Content-faithful:** each writes exactly the full 
 
 ### `retrospective(period)`
 
-Aggregate **real** cooking history from `cooking_log.toml` over a period, joining `type=recipe` entries to the recipe index for protein/cuisine.
+Aggregate **real** cooking history from the cooking log over a period, joining `type=recipe` entries to the recipe index for protein/cuisine.
 
 **Params:**
 - `period` (string, optional, default `"month"`): `"Nd"` (e.g. `"30d"`) | `"week"` | `"month"` | `"quarter"` | `"year"` | `"all"`.
@@ -538,7 +538,7 @@ All sections are optional except `commit_message`.
 
 ### `place_order(payload)`
 
-The order-time flush — the **only** tool that writes a Kroger cart. Resolves the whole to-buy set against *current* Kroger availability, writes the cart (`PUT /v1/cart/add`), and appends learned ingredient→SKU mappings to `skus/kroger.toml`. Backed by the Kroger `authorization_code` + PKCE user-context client and the KV-backed rotating refresh token.
+The order-time flush — the **only** tool that writes a Kroger cart. Resolves the whole to-buy set against *current* Kroger availability, writes the cart (`PUT /v1/cart/add`), and caches learned ingredient→SKU mappings to the shared SKU cache. Backed by the Kroger `authorization_code` + PKCE user-context client and the KV-backed rotating refresh token.
 
 **To-buy set (order-time dedup):** `grocery_list ∪ menu_needs − pantry_has`. Only `active` list items participate. A name present in the pantry is **not** silently dropped — it returns in `partials` for you to prompt on, and is bought only if the user confirms it via `include_partials` (the no-auto-decide rule). Default buy quantity is **1 package** per item unless overridden.
 
@@ -556,7 +556,7 @@ The order-time flush — the **only** tool that writes a Kroger cart. Resolves t
   preview:          bool                                    // resolve + report only; no cart write, no commits
 }
 ```
-All sections optional. With no args it flushes the current `grocery_list.toml`.
+All sections optional. With no args it flushes the current grocery list.
 
 **Returns:**
 ```

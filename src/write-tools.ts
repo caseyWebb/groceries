@@ -109,7 +109,7 @@ async function buildPantryUpdate(
   operations: Parameters<typeof applyPantryOperations>[1],
   verifyNames: string[],
 ): Promise<{ file: TreeFile | null; applied: unknown[]; conflicts: unknown[] }> {
-  const text = await readFile(gh, path, "not_found", "pantry.toml is missing");
+  const text = await readFile(gh, path, "not_found", "no pantry is set up");
   const parsed = parseToml(text, path);
   let items = itemsOf(parsed) as PantryItem[];
 
@@ -371,7 +371,7 @@ export function registerWriteTools(server: McpServer, gh: GitHubClient, userPref
     "add_draft_ready_to_eat",
     {
       description:
-        "Append ready-to-eat items to the caller's personal catalog (users/<id>/ready_to_eat.toml). Each item needs a meal (breakfast|lunch|dinner). Defaults to draft; pass status:'active' for an item the user explicitly accepts (e.g. during onboarding). Returns the generated slug for each.",
+        "Append ready-to-eat items to the caller's personal ready-to-eat catalog. Each item needs a meal (breakfast|lunch|dinner). Defaults to draft; pass status:'active' for an item the user explicitly accepts (e.g. during onboarding). Returns the generated slug for each.",
       inputSchema: {
         items: z.array(
           z.object({

@@ -35,7 +35,7 @@ export async function loadRetrospective(
     sharedGh,
     "_indexes/recipes.json",
     "index_unavailable",
-    "_indexes/recipes.json is missing",
+    "the recipe index is unavailable",
   );
   let index: RecipeIndex;
   try {
@@ -71,7 +71,7 @@ export function registerCookingTools(
     "retrospective",
     {
       description:
-        "Aggregate cooking history over a period from cooking_log.toml. period accepts 'Nd' (e.g. '30d'), 'week', 'month', 'quarter', 'year', or 'all'. Returns recipes_cooked, protein_mix, cuisine_mix (non-recipe entries counted via inline dims; missing → 'unknown'), cadence (cooks/week, recipe+ad_hoc only), cook_vs_convenience (cooked vs ready_to_eat), ready_to_eat_favorites (frequency-ranked), and underused (active recipes not cooked in the window).",
+        "Aggregate cooking history over a period from the cooking log. period accepts 'Nd' (e.g. '30d'), 'week', 'month', 'quarter', 'year', or 'all'. Returns recipes_cooked, protein_mix, cuisine_mix (non-recipe entries counted via inline dims; missing → 'unknown'), cadence (cooks/week, recipe+ad_hoc only), cook_vs_convenience (cooked vs ready_to_eat), ready_to_eat_favorites (frequency-ranked), and underused (active recipes not cooked in the window).",
       inputSchema: { period: z.string().optional() },
     },
     ({ period }) => runTool(() => loadRetrospective(gh, sharedGh, period ?? "month")),

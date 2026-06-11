@@ -1,6 +1,6 @@
 ---
 name: update-pantry
-description: "Record changes to what's physically in the kitchen. Use for \"I ran out of olive oil\", \"I just put 3 lb of ground beef in the freezer\", \"I used the last of the parmesan\", \"added basil and tomatoes from the market\". Parses adds/removes and updates pantry.toml. (A market haul the user wants worked into the week is a menu request, not just a pantry update.)"
+description: "Record changes to what's physically in the kitchen. Use for \"I ran out of olive oil\", \"I just put 3 lb of ground beef in the freezer\", \"I used the last of the parmesan\", \"added basil and tomatoes from the market\". Parses adds/removes and updates the pantry. (A market haul the user wants worked into the week is a menu request, not just a pantry update.)"
 ---
 
 > **Prerequisite** — if you haven't already this session, read the `grocery-core` and `grocery-cart` skills before continuing.

@@ -51,7 +51,7 @@ export function registerDiscoveryTools(
     "fetch_rss_discoveries",
     {
       description:
-        "Pull the feeds in feeds.toml and return a deduped POOL of candidate recipes ({ url, title, source, feed_weight, summary }) — deduped against recipes already in the corpus (by source URL) and canonicalized (tracking query strings stripped). No taste score: YOU judge taste fit against taste.md and pick the 1–2 worth importing, then import_recipe + create_recipe each. Empty/absent feeds.toml returns an empty pool. Unreachable feeds are skipped (reported in `skipped`), not fatal.",
+        "Pull the user's configured discovery feeds and return a deduped POOL of candidate recipes ({ url, title, source, feed_weight, summary }) — deduped against recipes already in the corpus (by source URL) and canonicalized (tracking query strings stripped). No taste score: YOU judge taste fit against the user's taste profile (read_taste) and pick the 1–2 worth importing, then import_recipe + create_recipe each. No configured feeds returns an empty pool. Unreachable feeds are skipped (reported in `skipped`), not fatal.",
       inputSchema: {},
     },
     () =>
@@ -145,7 +145,7 @@ export function registerDiscoveryTools(
     "create_recipe",
     {
       description:
-        "Write a NEW recipe markdown file (recipes/<slug>.md) to the SHARED corpus, as one solo commit. Slug derives from the title unless `slug` is given. Discovery imports: pass status 'draft' with discovered_at + discovery_source (status defaults to 'draft' if omitted). The body MUST contain ## Ingredients and ## Instructions. Refuses to overwrite an existing slug (slug_exists), and refuses to duplicate a recipe whose `source` URL is already in the corpus (already_exists, with the existing slug — reuse it).",
+        "Write a NEW recipe to the SHARED corpus, as one solo commit. Slug derives from the title unless `slug` is given. Discovery imports: pass status 'draft' with discovered_at + discovery_source (status defaults to 'draft' if omitted). The body MUST contain ## Ingredients and ## Instructions. Refuses to overwrite an existing slug (slug_exists), and refuses to duplicate a recipe whose `source` URL is already in the corpus (already_exists, with the existing slug — reuse it).",
       inputSchema: {
         frontmatter: z.record(z.string(), z.unknown()),
         body: z.string(),
@@ -165,7 +165,7 @@ export function registerDiscoveryTools(
           if (existing) {
             throw new ToolError(
               "already_exists",
-              `A recipe for ${source} already exists at recipes/${existing}.md — reuse it`,
+              `A recipe for ${source} already exists (slug: ${existing}) — reuse it`,
               { slug: existing, source },
             );
           }

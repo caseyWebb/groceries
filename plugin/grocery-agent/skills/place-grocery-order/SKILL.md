@@ -9,7 +9,7 @@ description: "Flush the grocery list to the Kroger cart — the deliberate act d
 
 This is the **flush** — distinct from the menu request's capture. It may happen in the same sitting as a menu request or days later.
 
-1. **Stale-cart check first.** Read `grocery_list.toml`. If any items are still `in_cart` from a prior order that was never confirmed `ordered`, remind me to clear the Kroger cart manually before proceeding (silently flushing again double-adds). Wait for my acknowledgment.
+1. **Stale-cart check first.** Read the grocery list (`read_grocery_list`). If any items are still `in_cart` from a prior order that was never confirmed `ordered`, remind me to clear the Kroger cart manually before proceeding (silently flushing again double-adds). Wait for my acknowledgment.
 
 2. **Resolve and preview.** Call `place_order(preview=true)` (optionally with `menu_needs` for needs not yet on the list). Surface, as one batch, anything that needs my decision before writing:
    - `checkpoint` items (`ambiguous` → pick from candidates; `unavailable` → offer `propose_substitutions`). Don't add these unilaterally.
@@ -22,4 +22,4 @@ This is the **flush** — distinct from the menu request's capture. It may happe
 
 **Lifecycle past `in_cart` is user-asserted — never claim it on your own:**
 - *"I placed the order"* → advance `in_cart` items to `ordered` (`update_grocery_list`).
-- *"I picked up the groceries"* → `received` (terminal): `remove_from_grocery_list` for each, and for `grocery`-kind items only, restock `pantry.toml` (`update_pantry`). `household`/`other` items don't touch the pantry.
+- *"I picked up the groceries"* → `received` (terminal): `remove_from_grocery_list` for each, and for `grocery`-kind items only, restock the pantry (`update_pantry`). `household`/`other` items don't touch the pantry.
