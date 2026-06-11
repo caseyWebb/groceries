@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseAllowlist,
   parseAuthResults,
+  authResultsHeader,
   gateMessage,
   rejectReasonFor,
   extractAnchors,
@@ -92,27 +93,63 @@ describe("gateMessage", () => {
   });
 });
 
+describe("authResultsHeader", () => {
+  const headers = [
+    { key: "received", value: "from mail.protonmail.ch by cloudflare-email.net" },
+    { key: "arc-authentication-results", value: "i=1; mx.cloudflare.net; dkim=pass header.d=dirtbag.social" },
+    { key: "authentication-results", value: "mx.cloudflare.net; dkim=pass header.d=dirtbag.social; spf=pass" },
+    { key: "dkim-signature", value: "v=1; a=rsa-sha256; d=dirtbag.social" },
+  ];
+
+  it("returns the verifier's authentication-results value (not arc-*)", () => {
+    const v = authResultsHeader(headers);
+    expect(v).toContain("dkim=pass header.d=dirtbag.social");
+    expect(v?.startsWith("mx.cloudflare.net")).toBe(true);
+  });
+
+  it("prefers the Cloudflare line when several authentication-results exist", () => {
+    const v = authResultsHeader([
+      { key: "authentication-results", value: "mail.protonmail.ch; dkim=none" },
+      { key: "authentication-results", value: "mx.cloudflare.net; dkim=pass header.d=dirtbag.social" },
+    ]);
+    expect(v).toContain("cloudflare");
+    expect(v).toContain("dkim=pass");
+  });
+
+  it("returns null when none present (or undefined input)", () => {
+    expect(authResultsHeader([{ key: "received", value: "x" }])).toBeNull();
+    expect(authResultsHeader(undefined)).toBeNull();
+  });
+
+  it("feeds parseAuthResults to an aligned member verdict end-to-end", () => {
+    const v = parseAuthResults(authResultsHeader(headers));
+    expect(v.dkim).toBe(true);
+    expect(v.dkimDomains).toContain("dirtbag.social");
+  });
+});
+
 describe("rejectReasonFor", () => {
+  const base = { from: "casey@dirtbag.social" };
   it("returns null for a successful index (links found)", () => {
-    expect(rejectReasonFor({ accepted: true, reason: "member_dkim", found: 2, written: 2 })).toBeNull();
+    expect(rejectReasonFor({ ...base, accepted: true, reason: "member_dkim", found: 2, written: 2 })).toBeNull();
   });
 
   it("returns null when accepted but all candidates were duplicates (not a failure)", () => {
-    expect(rejectReasonFor({ accepted: true, reason: "member_dkim", found: 3, written: 0 })).toBeNull();
+    expect(rejectReasonFor({ ...base, accepted: true, reason: "member_dkim", found: 3, written: 0 })).toBeNull();
   });
 
   it("rejects an accepted message with no recipe links found", () => {
-    const r = rejectReasonFor({ accepted: true, reason: "member_dkim", found: 0, written: 0 });
+    const r = rejectReasonFor({ ...base, accepted: true, reason: "member_dkim", found: 0, written: 0 });
     expect(r).toMatch(/no recipe links/i);
   });
 
   it("gives a detailed DKIM-alignment reason to a known-but-unaligned sender", () => {
-    const r = rejectReasonFor({ accepted: false, reason: "auth_unaligned", found: 0, written: 0 });
+    const r = rejectReasonFor({ ...base, accepted: false, reason: "auth_unaligned", found: 0, written: 0 });
     expect(r).toMatch(/DKIM/i);
   });
 
   it("gives a terse reason to a non-allowlisted sender", () => {
-    const r = rejectReasonFor({ accepted: false, reason: "not_allowlisted", found: 0, written: 0 });
+    const r = rejectReasonFor({ ...base, accepted: false, reason: "not_allowlisted", found: 0, written: 0 });
     expect(r).toMatch(/not an allowlisted/i);
   });
 });

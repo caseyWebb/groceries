@@ -83,7 +83,9 @@ export default {
   async email(message: InboundMessage, env: Env): Promise<void> {
     let reason: string | null;
     try {
-      reason = rejectReasonFor(await handleInboundEmail(message, env));
+      const result = await handleInboundEmail(message, env);
+      console.log("[email] " + JSON.stringify(result)); // one structured line per message
+      reason = rejectReasonFor(result);
     } catch (e) {
       console.error("inbound email handler failed:", e instanceof Error ? e.message : String(e));
       reason = "A processing error occurred while indexing the message.";

@@ -184,6 +184,20 @@ export function parseAuthResults(raw: string | null | undefined): AuthVerdicts {
   return v;
 }
 
+/**
+ * Pull the verifier's `Authentication-Results` value out of the raw message headers
+ * (postal-mime's `email.headers`). Cloudflare adds its own `authentication-results`
+ * line (`mx.cloudflare.net; dkim=pass header.d=…`); prefer it over any the sender
+ * carried. `arc-authentication-results` is a different key and is left alone.
+ */
+export function authResultsHeader(
+  headers: { key: string; value: string }[] | undefined | null,
+): string | null {
+  const all = (headers ?? []).filter((h) => h.key.toLowerCase() === "authentication-results");
+  if (all.length === 0) return null;
+  return (all.find((h) => /cloudflare/i.test(h.value)) ?? all[0]).value;
+}
+
 function domainOf(address: string): string {
   return address.toLowerCase().split("@")[1] ?? "";
 }
@@ -381,6 +395,8 @@ async function followRedirect(url: string): Promise<string> {
 export interface EmailResult {
   accepted: boolean;
   reason: GateReason;
+  /** The message `From` address (lowercased), for observability. */
+  from: string;
   /** Content links extracted from the body (before corpus/inbox dedup). */
   found: number;
   /** New candidates actually written to the inbox (0 ⇒ none new, e.g. all duplicates). */
@@ -430,29 +446,16 @@ export async function handleInboundEmail(message: InboundMessage, env: Env): Pro
   const gh = createGitHubClient(dataCoords(env), auth);
 
   const allowlist = parseAllowlist(await readOptional(gh, SOURCES_PATH));
-  const verdicts = parseAuthResults(message.headers.get("authentication-results"));
 
   const email = await PostalMime.parse(message.raw);
   const fromAddress = (email.from?.address ?? message.from ?? "").toLowerCase();
+  // Cloudflare's DKIM/SPF/DMARC verdict lives in the RAW message headers (which
+  // postal-mime parses into `email.headers`), NOT the live `message.headers` object
+  // — the latter is a stripped subset (date/from/subject/…) with no auth results.
+  const verdicts = parseAuthResults(authResultsHeader(email.headers));
 
   const gate = gateMessage({ from: fromAddress, allowlist, auth: verdicts });
-  // TEMP DIAGNOSTIC (remove after smoke test): message.headers carried no
-  // Authentication-Results — dump where the auth verdict actually lives (the raw
-  // headers postal-mime parses, vs. the live Headers object) so we read the right one.
-  const pmHeaders = (email.headers ?? []) as { key: string; value: string }[];
-  console.log(
-    "[email] headers " +
-      JSON.stringify({
-        from: fromAddress,
-        msgHeaderKeys: [...message.headers.keys()],
-        pmHeaderKeys: pmHeaders.map((h) => h.key),
-        authish: pmHeaders
-          .filter((h) => /auth|spf|dkim|dmarc|arc|received/i.test(h.key))
-          .map((h) => `${h.key}: ${h.value}`.slice(0, 240)),
-        gate,
-      }),
-  );
-  if (!gate.accepted) return { ...gate, found: 0, written: 0 };
+  if (!gate.accepted) return { ...gate, from: fromAddress, found: 0, written: 0 };
 
   // Resolve each anchor to its clean canonical destination, then keep content links.
   const anchors = extractAnchors(email.html, email.text);
@@ -467,11 +470,7 @@ export async function handleInboundEmail(message: InboundMessage, env: Env): Pro
     seenLocal.add(canonical);
     resolved.push({ title: a.title, url: canonical });
   }
-  console.log(
-    "[email] extracted " +
-      JSON.stringify({ anchors: anchors.length, found: resolved.length, urls: resolved.map((r) => r.url) }),
-  );
-  if (resolved.length === 0) return { ...gate, found: 0, written: 0 };
+  if (resolved.length === 0) return { ...gate, from: fromAddress, found: 0, written: 0 };
 
   const [indexRaw, inboxRaw] = await Promise.all([
     readOptional(gh, RECIPE_INDEX),
@@ -491,11 +490,10 @@ export async function handleInboundEmail(message: InboundMessage, env: Env): Pro
   };
 
   const { text, written } = appendInboxEntry(inboxRaw, entry, seen);
-  console.log("[email] write " + JSON.stringify({ found: resolved.length, written }));
-  if (written === 0) return { ...gate, found: resolved.length, written: 0 };
+  if (written === 0) return { ...gate, from: fromAddress, found: resolved.length, written: 0 };
 
   await commitFiles(gh, [{ path: INBOX_PATH, content: text }], `discovery: ${written} candidate(s) from ${fromAddress}`);
-  return { ...gate, found: resolved.length, written };
+  return { ...gate, from: fromAddress, found: resolved.length, written };
 }
 
 /** Best-effort calendar date (YYYY-MM-DD) from the message `Date` header; UTC, falls back to empty. */
