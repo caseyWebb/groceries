@@ -369,19 +369,141 @@ The bucket name `have_fresh` goes away too (it asserts a freshness the tool isn'
 
 ---
 
-## Change 12 (Phase 7): Perishability refinement
+## Change 12 (Phase 7): Storage-class guidance at put-away
 
-**Scope:** Populate `ingredients.toml` with shelf-life data, and use it to **inform** verify's freshness prompting — not replace the LLM judgment with it. Per the Change 08 staleness decision, freshness stays an LLM-judged, prompt-resolved concern (storage context isn't in the repo); Change 12 adds a `past_typical_fresh_life` hint to verify's `in_pantry` items so the LLM raises the right "still good?" prompts more reliably. The return contract is unchanged — no `have_stale` bucket is reintroduced. Also add waste-tracking observation in menu generation ("this menu leaves 3/4 of a cilantro bunch unused — want a third recipe that uses it?").
+**Scope:** Give the agent an **opinionated, curated** set of food-storage tips it
+surfaces at grocery **put-away** time ("here's how to store the basil you just
+bought"). This is the STORE-moment half of perishability — distinct from the
+BUY-moment waste callout (Change 12b). **`ingredients.toml` and the
+`past_typical_fresh_life` hint from the original Change 12 are CUT** — see the
+reframe below.
 
-**Dependencies:** Change 09. Change 11 helpful for context.
+**`ingredients.toml` is dead (decided, explore 2026-06-11):** The original Change 12
+was a hand-maintained shelf-life table feeding a freshness *hint*. That artifact
+encoded **facts the LLM already has** (basil lasts a week; olive oil doesn't spoil)
+— redundant with the model's own world knowledge, and Change 08 already accepted
+run-to-run non-determinism as the *right* failure mode for soft freshness nudges, so
+the table's only real offer (consistency) is something we explicitly don't need. Its
+two jobs both have better homes: generic shelf-life → the model knows it; package
+size → the Kroger SKU pipeline (Change 05) knows the *actual* pack. So `ingredients.toml`
+is removed entirely (drop the reserved `docs/SCHEMAS.md` block), and `read_pantry(stale_only)`
+stays the structured `{error:"unsupported"}` it has been since Change 04.
+
+**Why storage guidance clears the bar `ingredients.toml` failed (decided):** storage
+guidance is the *opposite* kind of artifact — it encodes **opinions/curation the LLM
+does NOT have**: a vetted, trusted, consistent set of tips, instead of the model
+improvising possibly-wrong advice each time. Same logic as curating a recipe corpus
+vs. asking the LLM to invent dinner. It's a quality/consistency layer, not a
+knowledge gap — so it must stay the **non-obvious, opinionated head** of each
+category, never an exhaustive every-vegetable table.
+
+**Shape (decided) — a storage-CLASS tree, not per-ingredient:**
+- Content lives in a `storage_guidance/<class>.md` tree at the **data-repo root**
+  (shared corpus — storage advice is objective/general, unlike per-tenant
+  `diet_principles`). Keyed by **storage behavior class** (`tender-herbs.md`,
+  `hardy-herbs.md`, `leafy-greens.md`, `alliums.md`, …) **not** per ingredient —
+  the same guidance covers basil-adjacent tender herbs, leafy greens, etc., so
+  per-ingredient files would duplicate identical tips and rot out of sync. A few
+  **singletons** (`basil.md`, `tomatoes.md`, `avocados.md`) exist because they break
+  their class's rule. A `_ethylene.md` file holds the **relational** "don't store
+  together" rules (pairwise — they belong to no single item).
+- **The LLM maps "I bought cilantro" → `tender-herbs.md` via its own world
+  knowledge** over semantic filenames — listed, then fetched on demand. Intentionally
+  **non-deterministic** (no manifest, no alias table); consistent with the Change 08
+  ethos. Over-fetching one file is harmless.
+- **Read-only — no `update_storage_guidance` tool (decided).** Hand-maintained
+  curated config (edit-when-directed bucket; needs a `docs/SCHEMAS.md` mention + a
+  line in `CLAUDE.md`'s curated-config list). The Worker surface is purely read-side.
+- **Confidence-in-prose (decided):** solid tips written plainly; contested ones
+  **pre-hedged in the prose itself** ("some cooks rinse berries in vinegar — results
+  vary") so the agent relays honesty just by reading. Extends the "never improvise a
+  tip" rule: never assert *folklore* as settled fact either. **No matching class
+  file → no tip** (silence > invention) — that guarantee is the whole point of curation.
+
+**Put-away trigger (decided):** fires on **both** the `received` restock flow
+(Change 06b) **and** the farmers-market `update_pantry` haul — i.e. "new perishables
+entering the kitchen," not only the order path. The LLM surfaces 2–3 *relevant*
+tips, judged non-obvious; don't nag the same tip every trip (accept mild repetition
+over building seen-tip state — same non-determinism tradeoff as Change 08).
+
+**Seed material:** the curated, ATK/Serious-Eats-weighted research spike lives at
+[`docs/notes/2026-06-11-storage-guidance-research.md`](docs/notes/2026-06-11-storage-guidance-research.md)
+— grouped by class (maps ~1:1 onto the file tree), with a contested/solid filter and
+sourcing caveats (ATK verbatim-verified; SE/dairy/mushroom/ginger second-hand, want a
+re-check). The tender-herb placement is verified: **other tender herbs → jar of water
+in the FRIDGE; basil → counter** (the lone exception; ATK asserts, did not head-to-head
+test). Curation of what makes the final file is Casey's call.
+
+**Dependencies:** Change 06b (the `received` restock flow the tip rides on) and the
+market-haul `update_pantry` path (Change 06). Change 09 not required (this is
+put-away, not menu-gen).
 
 **Deliverables:**
-- Populated `ingredients.toml`
-- `verify_pantry_*` tools surface a `past_typical_fresh_life` hint from `ingredients.toml` (informs the LLM's prompting; does not classify or gate)
-- Cross-recipe waste callouts in menu generation
-- Updated AGENT_INSTRUCTIONS.md
+- `storage_guidance/<class>.md` content tree at the data-repo root, seeded from the
+  research note (curated to the opinionated head; contested tips pre-hedged)
+- `docs/SCHEMAS.md` entry + `CLAUDE.md` curated-config-list line for `storage_guidance/`
+- **Remove** the reserved `ingredients.toml` block from `docs/SCHEMAS.md`
+- `list_storage_guidance` (slugs + optional one-line descriptions) and
+  `read_storage_guidance(slugs)` read tools per the `list_recipes`/`read_recipe`
+  pattern; `docs/TOOLS.md` kept in sync. **No write tool.**
+- AGENT_INSTRUCTIONS.md: the put-away behavior rule (received + market-haul triggers,
+  relevance + don't-nag, no-improvised/no-folklore guarantee)
 
-**Done when:** Less produce going bad in the fridge; occasional useful "consider swapping recipe X for Y, less waste" suggestions.
+**Done when:** At grocery put-away (order or market haul), the agent offers a couple
+of genuinely useful, trusted storage tips for the perishables just bought — and stays
+silent rather than inventing one when it has nothing vetted to say.
+
+---
+
+## Change 12b: Perishable-ingredient waste callout (menu-gen)
+
+**Scope:** The BUY-moment half of perishability — catch single-use perishables at
+**menu-generation** time ("this menu uses cilantro in just one recipe; the rest of
+the bunch will rot — want a second recipe that uses it, or a swap?"). **Independent
+of Change 12** (different moment, different files); descends from the same dead
+`ingredients.toml` reframe but shares nothing with the storage tree.
+
+**`perishable_ingredients` recipe field (decided, explore 2026-06-11):** a new recipe
+frontmatter field — a normalized list of the recipe's perishable ingredients.
+- **Why it earns a third ingredient representation:** recipes already carry ingredients
+  two ways — `ingredients_key` (top 5–7, for filtering) and the parsed `## Ingredients`
+  body. Neither serves waste detection: the waste-prone ingredients are the **minor**
+  ones (half-bunch of cilantro, 1 tbsp dill) that `ingredients_key` deliberately omits,
+  and the freeform body lines can't be matched across recipes without re-fighting the
+  `aliases.toml` matching tax. `perishable_ingredients` pins a **normalized name**,
+  paid once, so cross-recipe overlap is deterministic.
+- **Derived, not hand-maintained (decided):** the import/create flow LLM-classifies
+  perishables and writes the field — same shape as protein/cuisine classification at
+  import. One-time backfill over the existing corpus (a reconciliation pass, like the
+  Change 13 component-vocab seeding). Hand-edit only to correct a miss. It's objective
+  **shared recipe content** (lands in `_indexes/recipes.json`, written by
+  `create_recipe`/`update_recipe`) — NOT curated config.
+- **Classification test (decided):** not botany — *"would the leftover rot before I'd
+  use it?"* Fuzzy edges (eggs? potatoes?) are fine; a wrong call only costs a dismissed
+  nudge.
+
+**Menu-gen mechanic (decided):** union the `perishable_ingredients` of the proposed
+week → find the **overlap-of-one** (a perishable used by exactly one recipe) → offer a
+second recipe that uses it, or a swap. **Self-contained — no Kroger call needed for
+v1** (the model's own "cilantro ships as a bunch" knowledge carries the signal);
+SKU-driven package-size precision ("1 tbsp of a whole bunch") is an optional later
+layer, not a prerequisite.
+
+**Dependencies:** Change 09 (menu-generation flow this hooks into) + the recipe
+frontmatter/index/validation pipeline (`scripts/build-indexes.mjs`). Change 10/import
+flow for the at-import classification. Best **seeded by** the corpus backfill rather
+than designed in the abstract.
+
+**Deliverables:**
+- `perishable_ingredients` frontmatter field — `docs/SCHEMAS.md` entry; joins
+  `ingredients_key` in `_indexes/recipes.json`; `build-indexes.mjs` validates it's a
+  string array (warn-only on absence, like other optional fields)
+- At-import LLM classification in the import/create flow; one-time corpus backfill
+- Menu-gen overlap-of-one waste callout in AGENT_INSTRUCTIONS.md
+- `docs/TOOLS.md` kept in sync (the field surfaced wherever recipe content is returned)
+
+**Done when:** A menu proposal flags when it pulls in a perishable for a single recipe
+and offers to use it up or swap it out — without needing Kroger data to do it.
 
 ---
 
