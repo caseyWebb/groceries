@@ -113,7 +113,7 @@ Run the **Onboard member** Action (your data repo → Actions) with `username: <
 
 ## 8. Connect Claude.ai + Kroger consent
 
-- **Claude.ai**: add the marketplace (`/plugin marketplace add caseyWebb/grocery-agent`, or your fork) and install the **grocery-agent** plugin — it bundles the connector *and* all the agent's skills, so there's **nothing to paste**. On enable, Claude prompts for the **grocery-mcp Worker URL** (a plugin config value) — enter your `https://<worker-host>/mcp`. Then Claude.ai discovers the connector's OAuth endpoints and sends you to `/authorize` — **enter your invite code**. The token then carries your tenant on every request.
+- **Claude.ai**: add the marketplace (`/plugin marketplace add caseyWebb/groceries-agent`, or your fork) and install the **grocery-agent** plugin — it bundles the connector *and* all the agent's skills, so there's **nothing to paste**. On enable, Claude prompts for the **grocery-mcp Worker URL** (a plugin config value) — enter your `https://<worker-host>/mcp`. Then Claude.ai discovers the connector's OAuth endpoints and sends you to `/authorize` — **enter your invite code**. The token then carries your tenant on every request.
 - **Optional (skip the URL prompt for your friends)**: rebuild the committed bundle once with your Worker URL as the *default* and push — `npm run build:plugin -- --mcp-url https://<worker-host>/mcp --out plugin/grocery-agent`. Then anyone installing from your marketplace gets your URL pre-filled and can just accept it. The skills are generated from [`AGENT_INSTRUCTIONS.md`](../AGENT_INSTRUCTIONS.md) and guarded by CI; only this default differs per operator.
 - **Kroger consent** (one-time): visit `https://<worker-host>/oauth/init?tenant=<you>` and approve at Kroger. Re-run if a cart write ever returns `reauth_required`.
 
@@ -131,7 +131,7 @@ A friend needs only a Claude.ai account and a Kroger account — no GitHub, no K
 
 1. Your data repo → **Actions** → **Onboard member** → Run, enter their `username`. It allowlists them and mints their invite code (in the run summary, private to you). Their `users/<username>/` subtree is created on their first write.
 2. Send them the marketplace + the invite code — that's it. The plugin bundles the connector and skills, so there's no URL to paste and no instructions to copy.
-3. They add the marketplace (`/plugin marketplace add caseyWebb/grocery-agent`) and install the **grocery-agent** plugin → accept the default Worker URL (yours, if you baked it in) → enter the code at `/authorize` → run their Kroger consent (`/oauth/init?tenant=<username>`). Updates reach them automatically via `/plugin marketplace update`.
+3. They add the marketplace (`/plugin marketplace add caseyWebb/groceries-agent`) and install the **grocery-agent** plugin → accept the default Worker URL (yours, if you baked it in) → enter the code at `/authorize` → run their Kroger consent (`/oauth/init?tenant=<username>`). Updates reach them automatically via `/plugin marketplace update`.
 
 They share the recipe corpus (with their own ratings/notes) and have their own pantry, preferences, and Kroger cart — fully isolated from yours. To remove someone, run **Revoke member** (optionally deleting their `users/<username>/` subtree).
 
