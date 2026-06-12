@@ -28,7 +28,7 @@ The system is three pieces with one clean split: **the LLM does the fuzzy work; 
 ┌────────────────────────────────────────────────────────┐
 │  ONE private GitHub data repo (operator-owned)         │
 │   shared root (read by all):                           │
-│     recipes/*.md · aliases.toml · substitutions.toml   │
+│     recipes/*.md · aliases.toml                        │
 │     skus/kroger.toml · storage_guidance/ · feeds.toml  │
 │     stores/*.toml · _indexes/                           │
 │   users/<username>/ (one subtree per member):          │
@@ -41,7 +41,7 @@ The system is three pieces with one clean split: **the LLM does the fuzzy work; 
 ```
 
 - **Claude.ai** is the conversational surface and the reasoning. Each chat starts fresh; state lives in the data repo, not in chat history. The agent reads what it needs through MCP tools at the start of a conversation.
-- **The Worker** (this repo, root `src/`) is a Cloudflare Worker hosting the `grocery-mcp` MCP server — the domain tool surface (pantry, recipes, Kroger, substitutions, cart) — plus an OAuth 2.1 provider members connect their Claude.ai to. It is the locus of determinism and the multi-tenant gate.
+- **The Worker** (this repo, root `src/`) is a Cloudflare Worker hosting the `grocery-mcp` MCP server — the domain tool surface (pantry, recipes, Kroger, cart) — plus an OAuth 2.1 provider members connect their Claude.ai to. It is the locus of determinism and the multi-tenant gate.
 - **The data repo** (`<operator>/groceries-agent-data`, private) is the substrate: flat files (TOML + markdown) in git, with git history as the audit log. Created from [`groceries-agent-data-template`](https://github.com/caseyWebb/groceries-agent-data-template); see [`SELF_HOSTING.md`](SELF_HOSTING.md).
 
 There is no database, no scheduler, no CLI, and no stateful agent runtime — the `agents` SDK is present only for its stateless `createMcpHandler` MCP transport (no Durable Objects, no Workflows). Everything else is glue.
@@ -59,6 +59,10 @@ The whole design turns on putting the LLM only where genuinely-fuzzy judgment is
 **Everything else is deterministic code with no LLM in the loop:** file I/O, frontmatter parsing, recipe filtering and scoring, Kroger API calls, RSS/JSON-LD parsing, cart writes, git commits, index generation, validation.
 
 The MCP tool boundary is where this is enforced. Tools are **coarse and opinionated** — they wrap multi-step pipelines so the LLM can't bypass them. Raw building blocks (`kroger_raw_search`, `github_raw_write`, `cart_add_by_name`) are deliberately **not** exposed, because they would let the LLM skip the cache, the validation, or the SKU-matching pipeline. See [`TOOLS.md`](TOOLS.md) for the design philosophy and the full inventory.
+
+**The deeper pattern — capture → retrieve → narrow.** Where the system needs LLM-derived *knowledge* (not just orchestration), it does not re-derive it on every read; it **captures** the model's judgment once into persistent data, **retrieves** it deterministically, and lets the LLM **narrow** with live context. Recipe import already works this way: Claude classifies `protein` / `cuisine` / `perishable_ingredients` once at import (capture), the build projects them into `_indexes/` and `list_recipes` filters them (retrieve), and menu-gen reasons over the filtered set (narrow). The LLM sits at the two ends — the one-time capture and the contextual narrowing — while determinism owns the middle (identity, indexing, lookup) and the gates (validation). Caching beats re-reasoning at scale because the hot path stays deterministic, reserving the model for genuine novelty and genuine judgment — which is also what keeps the agent viable on a smaller, faster model.
+
+**Direction — thin tools, recipe-side retrieval, LLM reasoning.** The scaling pressure is on the recipe side, and it's already solved there: recipes are first-class entities with captured metadata and an index, and you never reason over the whole corpus at once — `list_recipes` filtering plus each member's **active overlay** narrow it to a small candidate set that loads into context. So the system leans into LLM reasoning at the *narrow* end (substitution, freshness, pantry matching, the to-buy list — all read-time over the loaded pantry + chosen recipes) and keeps deterministic *retrieval* only over what's unloadable (the Kroger catalog) or large (the corpus index). Tools shrink — `substitutions.toml`/`propose_substitutions` and `verify_pantry` (with its recipe-ingredient parser) fall out — and the reasoning moves into the skills. The near-term lever is **recipe faceting**: a `course` field so `meal-plan` fetches the relevant active slice (mains+sides) with metadata and reasons holistically. Ingredients stay strings; `aliases.toml` stays as the matcher's small normalization table. A self-growing *ingredient knowledge graph* was considered and deferred (the feature that justified it — expiry-driven cooking — is read-time-solvable). See [`adr/0001-determinism-boundary-capture-retrieve-narrow.md`](adr/0001-determinism-boundary-capture-retrieve-narrow.md) for the decision, the locked choices, the deferred graph, and the rollout (the `thin-pantry-and-substitution-path` change is Phase 0).
 
 ## Multi-tenant identity
 
@@ -78,7 +82,7 @@ The data repo is the system's memory. It splits two ways — shared vs per-tenan
 
 ### Shared vs per-tenant
 
-- **Shared corpus (data-repo root)** — objective, single-source, read by everyone: recipe **content** (`recipes/*.md`), `aliases.toml`, the default `substitutions.toml`, the location-tagged `skus/kroger.toml` cache, the curated `storage_guidance/` tree, the `stores/<slug>.toml` store registry (identity), and the discovery sources (`feeds.toml`, `discoveries_inbox.toml`, `discovery_sources.toml`). Discovery is shared and top-level: feeds and the newsletter inbox feed one group pool, judged against each caller's taste at read time. `_indexes/` is generated from the shared content.
+- **Shared corpus (data-repo root)** — objective, single-source, read by everyone: recipe **content** (`recipes/*.md`), `aliases.toml`, the location-tagged `skus/kroger.toml` cache, the curated `storage_guidance/` tree, the `stores/<slug>.toml` store registry (identity), and the discovery sources (`feeds.toml`, `discoveries_inbox.toml`, `discovery_sources.toml`). Discovery is shared and top-level: feeds and the newsletter inbox feed one group pool, judged against each caller's taste at read time. `_indexes/` is generated from the shared content.
 - **Per-tenant subtree (`users/<username>/`)** — each member's own state (below). The Worker addresses it by prefixing repo-relative paths, so one request can never reach another member's data.
 
 ### Three-category recipe model
@@ -128,7 +132,7 @@ The hardest deterministic problem: turning a recipe ingredient string ("extra vi
 6. **Confidence gate → LLM only when ambiguous** — **confident** (auto-pick): a cache hit, or a defined brand preference resolves it (including `[]` = "don't care, cheapest acceptable"). **Ambiguous**: no cache hit *and* no defined brand preference → return narrowed candidates and let Claude pick from context or ask.
 7. **Cache result** (persisted at order time) — the resolved mapping is appended to `skus/kroger.toml`; the matcher itself only resolves, and the cache write rides `place_order`'s flush.
 
-**Confidence is legible and self-extinguishing.** It comes entirely from `preferences.toml [brands]`, which is **tri-state**: key absent → ask; `[]` → "don't care," cheapest acceptable; `["A","B"]` → ranked preference. Every answered question caches, so it asks less over time — after a few weeks of use, most common ingredients are cached and never hit the LLM. **Substitution is a separate, confirmed step** via `propose_substitutions`, the sole owner of `substitutions.toml`. Quantity translation is intentionally coarse ("3 cloves garlic" → buy a bulb); pantry tracking absorbs the slack.
+**Confidence is legible and self-extinguishing.** It comes entirely from `preferences.toml [brands]`, which is **tri-state**: key absent → ask; `[]` → "don't care," cheapest acceptable; `["A","B"]` → ranked preference. Every answered question caches, so it asks less over time — after a few weeks of use, most common ingredients are cached and never hit the LLM. **Substitution is a separate, confirmed step** — LLM reasoning, not a tool: inventory subs are judged over the loaded pantry, sale/unavailable subs are enumerated from world knowledge and resolved as ordinary Kroger searches, and either is surfaced for the user to confirm. The matcher itself never substitutes. Quantity translation is intentionally coarse ("3 cloves garlic" → buy a bulb); pantry tracking absorbs the slack.
 
 ## Discovery and disposition
 
@@ -148,7 +152,7 @@ A GitHub Action regenerates derived data on every push to the data repo's `recip
 
 Ready-to-eat is per-tenant (`users/<username>/ready_to_eat.toml`), so it has **no** aggregate index; the Worker reads each member's catalog directly (the build still structurally validates any it finds).
 
-The same build runs **validation**: every TOML parses, every recipe frontmatter is well-formed, `pairs_with` references resolve, status values are in the enum, `substitutions.toml` rules are well-formed. Validation failures fail the Action (red CI) but don't block reads — the Worker keeps reading HEAD. The point is fast feedback, not gating. The Worker reimplements a *structural* subset of this validation in TypeScript for write-time checks (it can't run the Node validator on `workerd`).
+The same build runs **validation**: every TOML parses, every recipe frontmatter is well-formed, `pairs_with` references resolve, and status values are in the enum. Validation failures fail the Action (red CI) but don't block reads — the Worker keeps reading HEAD. The point is fast feedback, not gating. The Worker reimplements a *structural* subset of this validation in TypeScript for write-time checks (it can't run the Node validator on `workerd`).
 
 A useful side effect: the indexes are a public-ish artifact any tool can consume — `scripts/build-site.mjs` builds a static GitHub Pages cookbook from them with no backend.
 

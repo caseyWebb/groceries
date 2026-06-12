@@ -291,11 +291,10 @@ const CURATED_FILES: Record<string, string> = {
   preferences: "preferences.toml",
   taste: "taste.md",
   diet_principles: "diet_principles.md",
-  substitutions: "substitutions.toml",
   aliases: "aliases.toml",
 };
 /** Curated files that are SHARED reference data (root); the rest are per-tenant. */
-const SHARED_CURATED = new Set(["substitutions", "aliases"]);
+const SHARED_CURATED = new Set(["aliases"]);
 
 // --- registration ------------------------------------------------------------
 
@@ -543,7 +542,7 @@ export function registerWriteTools(server: McpServer, gh: GitHubClient, userPref
           .array(z.object({ slug: z.string(), updates: z.record(z.string(), z.unknown()) }))
           .optional(),
         config_updates: z
-          .array(z.object({ file: z.enum(["preferences", "taste", "diet_principles", "substitutions", "aliases"]), content: z.string() }))
+          .array(z.object({ file: z.enum(["preferences", "taste", "diet_principles", "aliases"]), content: z.string() }))
           .optional(),
         cooking_log_entries: z
           .array(

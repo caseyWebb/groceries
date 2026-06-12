@@ -1,8 +1,8 @@
 // buildServer wires the full grocery-mcp tool surface onto an McpServer: the
-// repo-data read + Kroger + pantry-verify tools defined here, plus the write,
-// grocery-list, order, discovery, notes, store, and cooking tool groups
-// registered from their own modules. Each tool returns a structured result;
-// failures map to the structured-error convention (errors.ts).
+// repo-data read + Kroger tools defined here, plus the write, grocery-list,
+// order, discovery, notes, store, and cooking tool groups registered from
+// their own modules. Each tool returns a structured result; failures map to
+// the structured-error convention (errors.ts).
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
@@ -41,21 +41,6 @@ import {
   type MatchResult,
 } from "./matching.js";
 import { compareUnitPrice, type UnitPriceItem } from "./unit-price.js";
-import { parseRecipeIngredient, extractIngredientLines, type ParsedIngredient } from "./recipe-ingredients.js";
-import {
-  parseSubstitutionRules,
-  mergeSubstitutionRules,
-  findRule,
-  proposeInventory,
-  proposeSale,
-  type SubRule,
-  type SubstitutionResult,
-} from "./substitutions.js";
-import {
-  verifyParsedIngredients,
-  aggregateVerifications,
-  type PantryItem,
-} from "./pantry-verify.js";
 
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
@@ -81,7 +66,6 @@ const pantryFilterShape = {
 const flyerFilterShape = {
   terms: z.array(z.string()).optional(),
   against_stockup: z.boolean().optional(),
-  against_substitutions: z.boolean().optional(),
   /** Minimum markdown to keep, as a percent of regular price (default 5). */
   min_savings_pct: z.number().optional(),
 };
@@ -240,45 +224,6 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
       })();
     }
     return ownedPromise;
-  }
-
-  /** Read and parse pantry items; empty/comment-only pantry yields []. */
-  async function getPantryItems(): Promise<PantryItem[]> {
-    const text = await readFile(gh, "pantry.toml", "not_found", "no pantry is set up");
-    const parsed = parseToml(text, "pantry.toml");
-    return Array.isArray(parsed.items) ? (parsed.items as PantryItem[]) : [];
-  }
-
-  /**
-   * Read standing substitution rules: the shared corpus rules joined with this
-   * tenant's optional personal override layer (`users/<id>/substitutions.toml`).
-   * A personal rule for an ingredient wins over the shared rule for that tenant
-   * only (§7.2). Absent/empty files yield [].
-   */
-  async function getSubstitutionRules(): Promise<SubRule[]> {
-    const [sharedText, overrideText] = await Promise.all([
-      readOptional(sharedGh, "substitutions.toml"),
-      readOptional(gh, "substitutions.toml"),
-    ]);
-    const shared = sharedText ? parseSubstitutionRules(parseToml(sharedText, "substitutions.toml")) : [];
-    if (!overrideText) return shared;
-    const override = parseSubstitutionRules(parseToml(overrideText, "substitutions.toml"));
-    return mergeSubstitutionRules(shared, override, await getAliases());
-  }
-
-  /** Parse a recipe's `## Ingredients` section into normalized ingredients. */
-  async function getRecipeIngredients(
-    slug: string,
-    aliases: Record<string, string>,
-  ): Promise<ParsedIngredient[]> {
-    if (!SLUG_RE.test(slug)) throw new ToolError("not_found", `Unknown recipe slug: ${slug}`, { slug });
-    const text = await readFile(sharedGh, `recipes/${slug}.md`, "not_found", `Unknown recipe slug: ${slug}`);
-    const { body } = parseMarkdown(text, `recipes/${slug}.md`);
-    const lines = extractIngredientLines(body);
-    if (lines === null) {
-      throw new ToolError("malformed_data", `recipe ${slug} has no '## Ingredients' section`, { slug });
-    }
-    return lines.map((line) => parseRecipeIngredient(line, aliases));
   }
 
   /** Run the resolve-only matcher for one ingredient with the shared deps. */
@@ -547,7 +492,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "kroger_flyer",
     {
       description:
-        "Synthesized sale scan (the public API has no flyer/circular endpoint). Scans precise context terms (passed plus stockup/substitution candidates) and broad curated category terms, keeps only MEANINGFUL discounts (on sale AND at least `min_savings_pct` off — default 5%, so neither Kroger's promo==regular non-sale echo nor penny/near-zero markdowns leak through; pass a lower `min_savings_pct` to widen, e.g. for a bulk stockup item), dedupes by productId. Each kept item carries `matched_terms` — every scanned term that surfaced it — so you can tell a stockup/menu match from a broad-category one. Explicitly non-exhaustive: each term returns a relevance-ranked page, not a discount-sorted one.",
+        "Synthesized sale scan (the public API has no flyer/circular endpoint). Scans precise context terms (passed `terms` plus, with `against_stockup`, the caller's stockup item names — including any substitute candidates the caller enumerates from world knowledge and passes in `terms`) and broad curated category terms, keeps only MEANINGFUL discounts (on sale AND at least `min_savings_pct` off — default 5%, so neither Kroger's promo==regular non-sale echo nor penny/near-zero markdowns leak through; pass a lower `min_savings_pct` to widen, e.g. for a bulk stockup item), dedupes by productId. Each kept item carries `matched_terms` — every scanned term that surfaced it — so you can tell a stockup/menu match from a broad-category one. Explicitly non-exhaustive: each term returns a relevance-ranked page, not a discount-sorted one.",
       inputSchema: { filter: z.object(flyerFilterShape).optional() },
     },
     ({ filter }) =>
@@ -563,21 +508,6 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
             for (const it of items) if (typeof it.name === "string") precise.push(it.name);
           }
         }
-        if (f.against_substitutions) {
-          const text = await readOptional(sharedGh, "substitutions.toml");
-          if (text) {
-            const rules = (parseToml(text, "substitutions.toml").rules as Record<string, unknown>[]) ?? [];
-            for (const r of rules) {
-              if (typeof r.ingredient === "string") precise.push(r.ingredient);
-              if (Array.isArray(r.acceptable_substitutes)) {
-                for (const s of r.acceptable_substitutes as unknown[]) {
-                  if (typeof s === "string") precise.push(s);
-                }
-              }
-            }
-          }
-        }
-
         // Broad terms: degrade gracefully when flyer_terms.toml is absent or empty.
         const broad: string[] = [];
         const flyerText = await readOptional(sharedGh, "flyer_terms.toml");
@@ -681,7 +611,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "match_ingredient_to_kroger_sku",
     {
       description:
-        "Run the resolve-only 7-step matching pipeline for one ingredient. Returns a confident match, OR the FULL set of ambiguous candidates (every fulfillable product for the term, relevance-ranked — not truncated, so you can list/compare them all without re-searching), OR unavailable. Never writes the cache (that rides place_order) and never substitutes (that's propose_substitutions). bypass_cache forces re-resolution.",
+        "Run the resolve-only 7-step matching pipeline for one ingredient. Returns a confident match, OR the FULL set of ambiguous candidates (every fulfillable product for the term, relevance-ranked — not truncated, so you can list/compare them all without re-searching), OR unavailable. Never writes the cache (that rides place_order) and never substitutes — when a swap is wanted, enumerate candidate ingredients from world knowledge and resolve each. bypass_cache forces re-resolution.",
       inputSchema: {
         ingredient: z.string(),
         context: z.object(matchContextShape).optional(),
@@ -690,76 +620,6 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     },
     ({ ingredient, context, bypass_cache }) =>
       runTool(() => resolveIngredient(ingredient, context ?? {}, bypass_cache ?? false)),
-  );
-
-  server.registerTool(
-    "verify_pantry_for_recipe",
-    {
-      description:
-        "Walk a recipe's parsed ingredients against the pantry. Returns facts, not freshness verdicts: in_pantry (exact matches, with age metadata for the agent's 'still good?' judgment), possible_matches (fuzzy candidates the agent confirms), not_in_pantry (to-buy), optional (non-blocking), inventory_substitutes_available. No have_stale bucket — the tool never classifies freshness, and never auto-matches a fuzzy candidate.",
-      inputSchema: { slug: z.string() },
-    },
-    ({ slug }) =>
-      runTool(async () => {
-        const aliases = await getAliases();
-        const [parsed, pantry, rules] = await Promise.all([
-          getRecipeIngredients(slug, aliases),
-          getPantryItems(),
-          getSubstitutionRules(),
-        ]);
-        return verifyParsedIngredients(parsed, pantry, rules, aliases);
-      }),
-  );
-
-  server.registerTool(
-    "verify_pantry_for_candidates",
-    {
-      description:
-        "Aggregate verify_pantry_for_recipe across several candidate recipes (open-ended menu requests). Same shape, deduped by ingredient name; not_in_pantry / possible_matches / inventory_substitutes_available carry for_recipes attribution.",
-      inputSchema: { slugs: z.array(z.string()) },
-    },
-    ({ slugs }) =>
-      runTool(async () => {
-        const aliases = await getAliases();
-        const [pantry, rules] = await Promise.all([getPantryItems(), getSubstitutionRules()]);
-        const perRecipe = await Promise.all(
-          slugs.map(async (slug) => {
-            const parsed = await getRecipeIngredients(slug, aliases);
-            return { slug, result: verifyParsedIngredients(parsed, pantry, rules, aliases) };
-          }),
-        );
-        return aggregateVerifications(perRecipe);
-      }),
-  );
-
-  server.registerTool(
-    "propose_substitutions",
-    {
-      description:
-        "Apply the standing substitution rules deterministically, returning { substitutes, unacceptable } for the agent to present for confirmation (never auto-applies). mode 'inventory' surfaces rule-acceptable substitutes present in the pantry; mode 'sale' fetches Kroger prices internally and surfaces rule-acceptable substitutes on sale. Empty result when no rule matches (dormant until substitution rules are seeded).",
-      inputSchema: { ingredient: z.string(), mode: z.enum(["inventory", "sale"]) },
-    },
-    ({ ingredient, mode }) =>
-      runTool(async (): Promise<SubstitutionResult> => {
-        const aliases = await getAliases();
-        const rules = await getSubstitutionRules();
-        const rule = findRule(rules, ingredient, aliases);
-        if (!rule) return { substitutes: [], unacceptable: [] };
-
-        if (mode === "inventory") {
-          const pantry = await getPantryItems();
-          const names = pantry.map((it) => (typeof it.name === "string" ? it.name : "")).filter(Boolean);
-          return proposeInventory(rule, names, aliases);
-        }
-
-        // sale: keep rule-acceptable substitutes that are on sale at the location.
-        const locationId = await getLocationId();
-        return proposeSale(rule, async (sub) => {
-          // Widen the pool so an on-sale match deeper than the first few isn't missed.
-          const candidates = await kroger.search(sub, { locationId, limit: 50 });
-          return candidates.filter(isFulfillable).some((c) => isOnSale(c));
-        });
-      }),
   );
 
   // Repo-data write tools route by category internally (content → shared root,

@@ -17,7 +17,7 @@ Capture buy-intent onto the **grocery list** continuously, as it comes up; **flu
 
 The Kroger cart is **write-only** — you can add to it, but not remove or check out. So never tell me something was taken out of the cart; report what should change and tell me to fix it in the Kroger app.
 
-**Substitutions are never automatic.** Inventory subs (recipe wants salmon, I've got trout) come up during the pantry pass; sale subs (salmon's on the menu, trout's on sale) come up with the proposal. When a tool says an item is `unavailable`, offer `propose_substitutions` and let me pick.
+**Substitutions are never automatic.** Inventory subs (recipe wants salmon, I've got trout) are your judgment over the loaded pantry — surface them during the pantry pass for me to confirm. Sale subs (salmon's on the menu, trout's on sale) come up with the proposal: enumerate the substitute candidates yourself from world knowledge and price them via the Kroger tools. When an item comes back `unavailable`, name a few sensible Kroger alternatives and let me pick — never apply a swap on your own.
 
 ## Putting groceries away — storage tips
 

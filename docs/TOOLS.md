@@ -64,7 +64,7 @@ Update recipe frontmatter fields. Use for `last_cooked`, `rating`, `status` tran
 **Returns:**
 - `{ slug, updated_fields, commit_sha? }` — confirmation of what was changed; `commit_sha` is present when a write landed and omitted when nothing changed
 
-**Notes:** Side-effect updates (last_cooked, rating, status) happen during normal flow. Other frontmatter edits require user direction. **Per-tenant routing:** `rating` and `status` are *subjective* — they write to the caller's `users/<id>/overlay.toml`, not the shared recipe, so one member's rating/disposition never changes another's. Objective frontmatter edits write the shared recipe content. `last_cooked` is never set by hand — it's derived from the caller's `cooking_log.toml`. `read_recipe`/`list_recipes` merge the caller's overlay (+ cooking-log `last_cooked`) onto shared content at read time; an absent overlay row means effective `status: draft`. `perishable_ingredients` is objective shared content (not subjective), so an edit to it writes the shared recipe; the Worker normalizes the names on write (the same `normalizeIngredient` the verify matcher uses) so cross-recipe overlap lines up.
+**Notes:** Side-effect updates (last_cooked, rating, status) happen during normal flow. Other frontmatter edits require user direction. **Per-tenant routing:** `rating` and `status` are *subjective* — they write to the caller's `users/<id>/overlay.toml`, not the shared recipe, so one member's rating/disposition never changes another's. Objective frontmatter edits write the shared recipe content. `last_cooked` is never set by hand — it's derived from the caller's `cooking_log.toml`. `read_recipe`/`list_recipes` merge the caller's overlay (+ cooking-log `last_cooked`) onto shared content at read time; an absent overlay row means effective `status: draft`. `perishable_ingredients` is objective shared content (not subjective), so an edit to it writes the shared recipe; the Worker normalizes the names on write (the same `normalizeIngredient` the Kroger matcher uses) so cross-recipe overlap lines up.
 
 ### `parse_recipe(url)`
 
@@ -101,7 +101,7 @@ Write a **new** recipe to the **shared corpus** (the data-repo root, read by eve
 - `{ error: "already_exists", slug, source }` — a recipe with this `source` URL is already in the shared corpus (idempotent import); `slug` is the existing recipe to reuse.
 - `{ error: "validation_failed" }` — no derivable slug (missing title), or the body lacks the required H2 sections.
 
-**Notes:** The everyday discovery write path: `parse_recipe` (parse) → agent cleans/classifies → `create_recipe`. Disposition of the resulting draft happens later via `update_recipe` (→ `active` + rating, or `rejected`). The frontmatter is a pass-through record, so objective fields including `requires_equipment` flow straight through; classify it conservatively (default `[]`, vocab slugs only, truly-irreplaceable gear). The Worker validates its *shape* (array of slugs); the **vocabulary** is enforced at build time (`build-indexes.mjs`), matching the `protein`/`cuisine` posture — an off-vocab slug can't reach the gate without the build, which fails first. `update_recipe` is the same pass-through and the path to backfill `requires_equipment` on existing recipes. `perishable_ingredients` flows through the same way and is **normalized on write** (verify-matcher normalization) — classify it at import alongside protein/cuisine, by the "would the leftover rot" test.
+**Notes:** The everyday discovery write path: `parse_recipe` (parse) → agent cleans/classifies → `create_recipe`. Disposition of the resulting draft happens later via `update_recipe` (→ `active` + rating, or `rejected`). The frontmatter is a pass-through record, so objective fields including `requires_equipment` flow straight through; classify it conservatively (default `[]`, vocab slugs only, truly-irreplaceable gear). The Worker validates its *shape* (array of slugs); the **vocabulary** is enforced at build time (`build-indexes.mjs`), matching the `protein`/`cuisine` posture — an off-vocab slug can't reach the gate without the build, which fails first. `update_recipe` is the same pass-through and the path to backfill `requires_equipment` on existing recipes. `perishable_ingredients` flows through the same way and is **normalized on write** (Kroger-matcher normalization) — classify it at import alongside protein/cuisine, by the "would the leftover rot" test.
 
 ---
 
@@ -188,45 +188,6 @@ Read the caller's kitchen equipment inventory (what they own to cook *with*).
 
 **Returns:**
 - `{ owned: [...], notes: {...} }` — `owned` is the array of `EQUIPMENT_VOCAB` slugs that **gate** recipe makeability; `notes` is the freeform cook-reasoning table (oven count, pan sizes) that **never** gates. Returns `{ owned: [], notes: {} }` when no `kitchen.toml` exists — an **absent** inventory means equipment is *unknown*, which makes the `list_recipes` makeability gate a no-op (everything shows).
-
-### `verify_pantry_for_recipe(slug)`
-
-Parse the named recipe's `## Ingredients` and walk each against the pantry. Returns **facts, not freshness verdicts** — the tool reports what's present and surfaces age metadata; the agent decides which items warrant a "still good?" prompt (resolved via `mark_pantry_verified`). The tool never classifies items as fresh/stale (it has no shelf-life data and freshness depends on storage, not age) and never guesses ambiguous matches.
-
-**Params:**
-- `slug` (string, required)
-
-**Returns:**
-```
-{
-  in_pantry: [...{                  // exact normalized match — confident
-    recipe_calls_for,               // parsed ingredient name
-    pantry_item,                    // matched pantry entry name
-    added_at, last_verified_at,
-    days_since_verified,            // for the agent's freshness-prompt judgment
-    category,                       // when present on the pantry item
-    prepared_from                   // slug if a cooked/prepared leftover
-  }],
-  possible_matches: [...{           // fuzzy/token-overlap candidate — AGENT CONFIRMS. ALL plausible
-    recipe_calls_for,               //   candidates per ingredient are listed (one entry each),
-    candidate_pantry_item           //   containment matches first; confirm → treat as in_pantry (suggest an aliases.toml entry)
-  }],
-  not_in_pantry: [...{ ingredient }],  // no candidate at all → to-buy list (presence-driven, never quantity-netted)
-  optional: [...ingredients],       // names of parsed "(optional ...)" ingredients — non-blocking; ask before adding to order
-  inventory_substitutes_available: [...{ recipe_calls_for, available_substitute }]  // ∅ until substitutions.toml seeded
-}
-```
-
-**Notes:** No `have_stale` bucket — freshness is an agent judgment over the surfaced age metadata, not a tool output. Matching is exact for `in_pantry`; anything inexact goes to `possible_matches` for the agent to confirm or reject (no silent false-misses, no silent false-positives) — **every** plausible pantry candidate for an ingredient is surfaced (not just the first), ranked containment-first, so the agent decides among the full set (coarse deterministic search → LLM narrows). `inventory_substitutes_available` applies `substitutions.toml` rules and is empty until rules are seeded. There is no shelf-life hint here — freshness stays an agent judgment; `storage_guidance/` supplies put-away advice instead.
-
-### `verify_pantry_for_candidates(slugs)`
-
-Same as above but for multiple candidate recipes (for open-ended menu requests). Aggregates the picture, deduped by parsed ingredient name.
-
-**Params:**
-- `slugs` (array of strings, required)
-
-**Returns:** Same shape as above, aggregated. Each `not_in_pantry`, `possible_matches`, and `inventory_substitutes_available` entry additionally carries `for_recipes: [...slugs]` — the candidate recipe(s) that need it — mirroring `grocery_list.toml`'s attribution and what `place_order` consumes.
 
 ### `update_pantry(operations)`
 
@@ -430,13 +391,12 @@ Read the **group's** attributed notes for a store, aggregated across everyone at
 
 ### `kroger_flyer(filter)`
 
-Synthesized sale scan — the public API has **no** flyer/circular endpoint, so this searches terms and keeps products with a **meaningful discount** — on sale **and** at least `min_savings_pct`% off (default **5%**) — deduped by `productId`. This excludes both Kroger's `promo == regular` non-sale echo and penny / near-zero markdowns. Scans **precise** terms (caller-passed plus stockup/substitution candidates) and **broad** curated category terms. Explicitly **non-exhaustive**: each term returns a relevance-ranked page (no sort-by-discount), so it samples the head of each category.
+Synthesized sale scan — the public API has **no** flyer/circular endpoint, so this searches terms and keeps products with a **meaningful discount** — on sale **and** at least `min_savings_pct`% off (default **5%**) — deduped by `productId`. This excludes both Kroger's `promo == regular` non-sale echo and penny / near-zero markdowns. Scans **precise** terms (caller-passed — current menu ingredients, stockup item names, and any substitute candidates the caller enumerates from world knowledge) and **broad** curated category terms. Explicitly **non-exhaustive**: each term returns a relevance-ranked page (no sort-by-discount), so it samples the head of each category.
 
 **Params:**
-- `filter` (object, optional): `{ terms?, against_stockup?, against_substitutions?, min_savings_pct? }`
-  - `terms` (array of strings): precise context terms (current menu ingredients, etc.).
+- `filter` (object, optional): `{ terms?, against_stockup?, min_savings_pct? }`
+  - `terms` (array of strings): precise context terms (current menu ingredients, enumerated substitute candidates, etc.).
   - `against_stockup` (boolean): also scan `stockup.toml` item names.
-  - `against_substitutions` (boolean): also scan `substitutions.toml` ingredients + their acceptable substitutes.
   - `min_savings_pct` (number, default 5): minimum percentage markdown required to keep a product. Pass lower (e.g. 3) to widen for bulk stockup items; pass higher to tighten. The `promo == regular` noise filter and fake-sale detection are unconditional regardless of this value.
 
 **Returns:**
@@ -459,7 +419,7 @@ Get current prices for a specific list of ingredients (used for menu pre-pass). 
 
 ### `match_ingredient_to_kroger_sku(ingredient, context)`
 
-Run the full 7-step matching pipeline. Returns a confident match, narrowed candidates for the LLM to choose from, or an `unavailable` signal. **Resolve-only** — it does not write the cache (that rides `place_order`) and it does not substitute (that's `propose_substitutions`).
+Run the full 7-step matching pipeline. Returns a confident match, narrowed candidates for the LLM to choose from, or an `unavailable` signal. **Resolve-only** — it does not write the cache (that rides `place_order`) and it does not substitute (when a swap is wanted, the agent enumerates candidate ingredients from world knowledge and resolves each).
 
 **Params:**
 - `ingredient` (string, required)
@@ -504,7 +464,7 @@ Run the full 7-step matching pipeline. Returns a confident match, narrowed candi
 }
 ```
 
-**Notes:** When ambiguous, the LLM picks from conversational context or asks the user; a standing "don't care" answer is recorded as `[]` in `preferences.toml [brands]`. On `unavailable`, the LLM may call `propose_substitutions` (which surfaces alternatives for confirmation) — the matcher never substitutes itself. All resolutions feed back into the cache via the next batched commit.
+**Notes:** When ambiguous, the LLM picks from conversational context or asks the user; a standing "don't care" answer is recorded as `[]` in `preferences.toml [brands]`. On `unavailable`, the LLM enumerates substitute candidates from world knowledge and resolves each (surfacing the alternatives for confirmation) — the matcher never substitutes itself. All resolutions feed back into the cache via the next batched commit.
 
 ### `compare_unit_price(items)`
 
@@ -524,23 +484,6 @@ Cross-reference the **caller's own** personal ready-to-eat catalog against curre
 
 **Returns:**
 - `{ available: { breakfast: [...{ name, slug, meal, products: [{ sku, brand, description, size, price, on_sale, available }] }], lunch: [...], dinner: [...] }, unavailable: [...{ name, slug, meal, catalog_sku }] }`
-
----
-
-## Substitution tools
-
-### `propose_substitutions(ingredient, mode)`
-
-Apply the standing substitution rules to surface acceptable alternatives.
-
-**Params:**
-- `ingredient` (string, required)
-- `mode` (string, required): `"inventory"` (substitutes available in pantry) or `"sale"` (substitutes on sale at Kroger)
-
-**Returns:**
-- `{ substitutes: [...], unacceptable: [...] }`
-
-**Notes:** Tool applies rules deterministically; LLM presents result to user for confirmation. `"sale"` mode fetches current Kroger flyer/price data **internally** (it does not require the caller to pre-pass `kroger_flyer`). Empty until `substitutions.toml` is seeded — the file is edit-when-directed user config. **Shared + per-tenant override:** rules come from the shared corpus `substitutions.toml` joined with this tenant's optional `users/<id>/substitutions.toml`; a personal rule for an ingredient **replaces** the shared rule for that ingredient — for this tenant only, others keep the shared rule.
 
 ---
 
@@ -633,7 +576,7 @@ Report whether the caller has set up their grocery profile, derived from a **sin
 
 A brand-new member whose subtree does not exist yet (404) returns `{ initialized: false, missing: [<all areas>] }` rather than erroring; any other upstream failure is a structured `upstream_unavailable`. Backs the `grocery-core` start-of-session onboarding gate — treat an errored/indeterminate result as non-gating (proceed).
 
-### `update_preferences(content)` / `update_taste(content)` / `update_diet_principles(content)` / `update_substitutions(content)` / `update_aliases(content)`
+### `update_preferences(content)` / `update_taste(content)` / `update_diet_principles(content)` / `update_aliases(content)`
 
 Write to user-curated files. **Content-faithful:** each writes exactly the full file content supplied by the caller — no inferred merge. **These should only be called when the user explicitly directs an edit.** The tools exist; the discipline of when to call them lives in AGENT_INSTRUCTIONS.md.
 
@@ -726,7 +669,7 @@ Persist a batch of repo updates as **one** atomic git commit — no cart. The ev
   pantry_verified:      [name, name, ...],            // reset last_verified_at
   ready_to_eat_drafts:  [{ meal, name, status?, category?, source?, brand?, notes? }],  // → caller's ready_to_eat.toml; status draft (default) | active
   ready_to_eat_updates: [{ slug, updates }],          // addressed by slug in the caller's catalog
-  config_updates:       [{ file, content }],          // file: preferences|taste|diet_principles|substitutions|aliases
+  config_updates:       [{ file, content }],          // file: preferences|taste|diet_principles|aliases
   cooking_log_entries:  [{ type, date?, recipe?, name?, protein?, cuisine? }],  // append cooked meals; date defaults to today
   meal_plan_ops:        [{ op, recipe, planned_for? }],   // op: add | remove  (committed cook intent)
   grocery_list_ops:     [{ op, item?, name? }],           // op: add | update | remove  (SKU-free buy list)

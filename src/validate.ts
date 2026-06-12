@@ -263,7 +263,7 @@ export function validateFile(path: string, content: string): void {
     return;
   }
 
-  // Other TOML (preferences, substitutions, aliases, stockup, flyer_terms, …):
+  // Other TOML (preferences, aliases, stockup, flyer_terms, …):
   // parse-only — confirm it isn't syntactic garbage before committing.
   if (path.endsWith(".toml")) {
     parseTomlOrFail(path, content);

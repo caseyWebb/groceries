@@ -61,15 +61,15 @@ The Kroger SKU cache SHALL live in the shared corpus and each cached entry SHALL
 
 ### Requirement: Shared reference data
 
-The reference-data file `aliases.toml` SHALL live in the shared corpus and be read by all tenants. `substitutions.toml` SHALL default to the shared corpus, with an optional per-tenant override layer so a tenant can carry personal substitution rules; where a tenant override exists it SHALL take precedence over the shared rule for that tenant only. (`ingredients.toml` is removed — see the design doc and the `data-read-tools` delta; freshness is LLM-judged, not driven by a shelf-life table.)
+The reference-data file `aliases.toml` SHALL live in the shared corpus and be read by all tenants. There is no shared `substitutions.toml` and no per-tenant substitution-override layer — ingredient substitution is LLM reasoning (over the loaded pantry for inventory subs, and over enumerated Kroger searches for sale subs), not a curated rules file. (`ingredients.toml` is likewise removed — freshness is LLM-judged, not driven by a shelf-life table.)
 
 #### Scenario: Shared aliases apply to all tenants
 
 - **WHEN** any tenant normalizes an ingredient term
 - **THEN** the shared `aliases.toml` is consulted, identically for every tenant
 
-#### Scenario: Per-tenant substitution override wins for that tenant
+#### Scenario: No substitutions reference file is present
 
-- **WHEN** a tenant has a personal substitution rule for an ingredient that also has a shared rule
-- **THEN** the tenant's override is applied for that tenant, while other tenants still see the shared rule
+- **WHEN** the shared corpus reference data is enumerated
+- **THEN** there is no `substitutions.toml` at the root and no `users/<id>/substitutions.toml` override; substitution candidates are produced by agent reasoning, not read from a file
 

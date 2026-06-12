@@ -1,7 +1,8 @@
 // The match_ingredient_to_kroger_sku pipeline (designs D5–D9). Resolve-only: it
 // returns one of three shapes (confident / ambiguous / unavailable) and NEVER
 // writes the SKU cache (that rides the Change 06 batched commit) and NEVER
-// substitutes (that's propose_substitutions). The deterministic 7-step pipeline:
+// substitutes (substitution is LLM reasoning over enumerated candidates, not
+// this matcher). The deterministic 7-step pipeline:
 //   1. alias-driven normalization
 //   2. cache lookup + revalidation (no TTL)
 //   3. term search
