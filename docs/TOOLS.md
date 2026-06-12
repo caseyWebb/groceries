@@ -622,6 +622,15 @@ Return `{ content }` — the user's taste-profile narrative (markdown). Throws `
 
 Return `{ content }` — the user's diet-principles narrative (variety rules, markdown). Throws `not_found` when unset.
 
+### `profile_status()`
+
+Report whether the caller has set up their grocery profile, derived from a **single** listing of their own `users/<username>/` subtree (one Contents-API call, not a fan of per-area reads). Per-tenant, read-only, no params.
+
+**Returns:**
+- `{ initialized, missing }` — `initialized` (boolean) is `true` once `preferences.toml` exists (the unconditional first onboarding area, so its presence reliably means "got past setup"); `missing` (string[]) lists the onboarding-area keys whose backing file is absent, from the fixed mapping `store`→`preferences.toml`, `taste`→`taste.md`, `diet`→`diet_principles.md`, `equipment`→`kitchen.toml`, `pantry`→`pantry.toml`, `ready-to-eat`→`ready_to_eat.toml`, `stockup`→`stockup.toml`, `corpus`→`overlay.toml`.
+
+A brand-new member whose subtree does not exist yet (404) returns `{ initialized: false, missing: [<all areas>] }` rather than erroring; any other upstream failure is a structured `upstream_unavailable`. Backs the `grocery-core` start-of-session onboarding gate — treat an errored/indeterminate result as non-gating (proceed).
+
 ### `update_preferences(content)` / `update_taste(content)` / `update_diet_principles(content)` / `update_substitutions(content)` / `update_aliases(content)`
 
 Write to user-curated files. **Content-faithful:** each writes exactly the full file content supplied by the caller — no inferred merge. **These should only be called when the user explicitly directs an edit.** The tools exist; the discipline of when to call them lives in AGENT_INSTRUCTIONS.md.

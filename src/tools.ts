@@ -21,6 +21,7 @@ import { registerStoreTools } from "./stores-tools.js";
 import { registerCookingTools } from "./cooking-tools.js";
 import { filterRecipes, type RecipeFilters, type RecipeIndex } from "./recipes.js";
 import { listStorageGuidance, readStorageGuidance } from "./storage-guidance.js";
+import { profileStatus } from "./profile-status.js";
 import { parseOverlay, mergeOverlay, type Overlay } from "./overlay.js";
 import { toInventory } from "./kitchen.js";
 import { entriesOf, deriveLastCooked } from "./cooking-log.js";
@@ -481,6 +482,16 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
         );
         return { content };
       }),
+  );
+
+  server.registerTool(
+    "profile_status",
+    {
+      description:
+        "Report whether the caller has set up their grocery profile, from a single listing of their own subtree. Returns { initialized, missing }: `initialized` is true once preferences.toml exists (the unconditional first onboarding area); `missing` lists the onboarding-area keys still absent (store, taste, diet, equipment, pantry, ready-to-eat, stockup, corpus). A brand-new member with no files yet is { initialized: false, missing: [all areas] }. Read-only, no params. Use it as the up-front gate before doing real work — on initialized:false, run the configure-grocery-profile flow first. If this call errors, treat the result as indeterminate and proceed.",
+      inputSchema: {},
+    },
+    () => runTool(() => profileStatus(gh)),
   );
 
   server.registerTool(
