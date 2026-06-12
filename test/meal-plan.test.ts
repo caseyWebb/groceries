@@ -12,6 +12,19 @@ describe("plannedOf", () => {
   it("returns [] when absent", () => {
     expect(plannedOf({})).toEqual([]);
   });
+  it("carries open-world sides when present, omits when empty/absent", () => {
+    const parsed = {
+      planned: [
+        { recipe: "salmon", sides: ["roasted broccoli", "white rice"] },
+        { recipe: "chili", sides: [] }, // empty → no sides key
+        { recipe: "tacos" }, // absent → no sides key
+      ],
+    };
+    const out = plannedOf(parsed);
+    expect(out[0]).toEqual({ recipe: "salmon", planned_for: null, sides: ["roasted broccoli", "white rice"] });
+    expect(out[1]).toEqual({ recipe: "chili", planned_for: null });
+    expect(out[2]).toEqual({ recipe: "tacos", planned_for: null });
+  });
 });
 
 describe("applyMealPlanOps", () => {
@@ -41,6 +54,25 @@ describe("applyMealPlanOps", () => {
     const res = applyMealPlanOps(items, [{ op: "add", recipe: "x", planned_for: "tomorrow" }]);
     expect(res.applied).toHaveLength(0);
     expect(res.conflicts[0].reason).toMatch(/planned_for/);
+  });
+
+  it("attaches open-world sides on add", () => {
+    const res = applyMealPlanOps([], [{ op: "add", recipe: "miso-salmon", planned_for: "2026-06-14", sides: ["roasted broccoli"] }]);
+    expect(res.items).toContainEqual({ recipe: "miso-salmon", planned_for: "2026-06-14", sides: ["roasted broccoli"] });
+  });
+
+  it("merges sides onto an existing row (union, no duplicate row)", () => {
+    const start: PlannedItem[] = [{ recipe: "miso-salmon", planned_for: "2026-06-14", sides: ["roasted broccoli"] }];
+    const res = applyMealPlanOps(start, [{ op: "add", recipe: "miso-salmon", sides: ["roasted broccoli", "white rice"] }]);
+    const row = res.items.filter((i) => i.recipe === "miso-salmon");
+    expect(row).toHaveLength(1);
+    expect(row[0].sides).toEqual(["roasted broccoli", "white rice"]); // deduped union, order preserved
+  });
+
+  it("remove drops the row and its sides", () => {
+    const start: PlannedItem[] = [{ recipe: "miso-salmon", planned_for: null, sides: ["roasted broccoli"] }];
+    const res = applyMealPlanOps(start, [{ op: "remove", recipe: "miso-salmon" }]);
+    expect(res.items).toHaveLength(0);
   });
 });
 

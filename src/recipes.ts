@@ -5,6 +5,8 @@ export interface RecipeFilters {
   status?: string;
   protein?: string;
   cuisine?: string;
+  /** Open-vocabulary course facet; matched by containment against the recipe's course list. */
+  course?: string;
   query?: string;
   season?: string[];
   dietary?: string[];
@@ -96,6 +98,18 @@ export function filterRecipes(
     if (wantStatus !== null && recipe.status !== wantStatus) continue;
     if (filters.protein !== undefined && recipe.protein !== filters.protein) continue;
     if (filters.cuisine !== undefined && recipe.cuisine !== filters.cuisine) continue;
+
+    // course is matched by CONTAINMENT (not equality): a recipe passes when its
+    // course list includes the requested value, so a dual-use `[main, side]` recipe
+    // satisfies both `course: "main"` and `course: "side"`. The indexed course is a
+    // normalized array; tolerate a scalar defensively.
+    if (filters.course !== undefined) {
+      const want = filters.course.trim().toLowerCase();
+      const courses = (
+        Array.isArray(recipe.course) ? recipe.course : recipe.course != null ? [recipe.course] : []
+      ).map((c) => String(c).trim().toLowerCase());
+      if (!courses.includes(want)) continue;
+    }
 
     if (filters.season?.length) {
       const season = asArray(recipe.season);

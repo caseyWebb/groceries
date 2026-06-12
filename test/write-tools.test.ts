@@ -187,6 +187,20 @@ describe("buildMealPlanUpdate", () => {
     expect(file).toBeNull();
     expect(conflicts).toHaveLength(1);
   });
+
+  it("round-trips open-world sides through serialization", async () => {
+    const gh = ghWith({ "meal_plan.toml": "# header\n" });
+    const { file } = await buildMealPlanUpdate(gh, "meal_plan.toml", [
+      { op: "add", recipe: "miso-salmon", planned_for: "2026-07-01", sides: ["roasted broccoli", "white rice"] },
+    ]);
+    expect(file).not.toBeNull();
+    const parsed = parseToml(file!.content) as { planned: Record<string, unknown>[] };
+    expect(parsed.planned[0]).toMatchObject({
+      recipe: "miso-salmon",
+      planned_for: "2026-07-01",
+      sides: ["roasted broccoli", "white rice"],
+    });
+  });
 });
 
 describe("splitRecipeUpdate (content vs overlay routing)", () => {

@@ -21,7 +21,7 @@ The complete tool surface exposed by `grocery-mcp` to Claude. Each tool encodes 
 List recipes matching filters. Reads from `_indexes/recipes.json` (single API call).
 
 **Params:**
-- `filters` (object, optional): `{ status?, protein?, cuisine?, query?, season?, dietary?, max_time_total?, not_cooked_since?, exclude_cooked_within_days?, include_unmakeable? }`
+- `filters` (object, optional): `{ status?, protein?, cuisine?, course?, query?, season?, dietary?, max_time_total?, not_cooked_since?, exclude_cooked_within_days?, include_unmakeable? }`
 
 **Returns:**
 - `{ recipes: [{ slug, title, frontmatter }] }` — array of matched recipes with frontmatter. Under `include_unmakeable`, a gated-in recipe's `frontmatter` additionally carries `missing_equipment: [slugs]`.
@@ -30,6 +30,7 @@ List recipes matching filters. Reads from `_indexes/recipes.json` (single API ca
 - Default `status: active`. Use `status: draft` to see discoveries awaiting disposition, or `status: "all"` to opt out of status filtering entirely.
 - **Makeability gate (default-on):** joins the caller's `kitchen.toml` `owned` and drops recipes whose `requires_equipment` is not a subset of `owned`, so a recipe the caller can't make is never surfaced. An **empty/absent** `owned` (unknown inventory) makes the gate a **no-op** (everything passes) — it never guts the corpus for an un-onboarded member. `include_unmakeable: true` disables the drop and instead returns those recipes annotated with `missing_equipment` — use it when surfacing a specifically **named** dish so it's flagged, never silently dropped. Pure subset test over the index + `owned`; no ranking.
 - Array filters (`dietary`, `season`) match **all** listed values (AND/narrowing). **There is no `tags` filter** — keyword/tag matching is done by `query`.
+- `course` (string): the **open-vocabulary** dish-type facet (`main | side | dessert | breakfast | …`), matched by **containment** — `course: "side"` returns every recipe whose `course` array includes `side`, including a dual-use `[main, side]` dish. Case/whitespace-insensitive; the value is matched literally against the normalized index (no controlled set). One faceted `list_recipes({ status: "active" })` call returns mains and sides together (each entry's `frontmatter` carries `course`); the caller buckets by `course` — the return stays flat, never grouped.
 - `query` (string): the single name/keyword search over `title` **and** `tags`. Tokenize on whitespace, drop connective stopwords (`and`, `or`, `with`, `the`, `a`, `an`, `of`, `in`, `on`, `for`, `&`), then keep a recipe when **every** remaining token is a case-insensitive substring of its `title` or any `tag` (token-AND). Deterministic membership only — no ranking, scoring, or fuzzy matching. So `"chicken and rice"` ≡ `"chicken rice"` and surfaces a recipe titled "Chicken and Rice" even when its tags omit "rice". ANDed with the other filters; an absent, empty, or all-stopword `query` applies no text narrowing.
 - `exclude_cooked_within_days` (number): drop recipes cooked within the last N days. Caller-supplied window, not a stored default.
 - `not_cooked_since` (date): recipes with `last_cooked: null` (never cooked) **pass** this filter.
@@ -42,7 +43,7 @@ Read a single recipe's full content (frontmatter + body).
 - `slug` (string, required)
 
 **Returns:**
-- `{ slug, frontmatter, body }` — `frontmatter` includes the objective shared fields, among them `perishable_ingredients` (a normalized list of the recipe's perishable ingredients; empty when absent) and the pairing fields `standalone` (true = a complete one-pot plate) / `pairs_with` (slugs of suggested sides). The `perishable_ingredients` field also rides each entry's `frontmatter` from the index-backed `list_recipes`, so the menu-gen waste callout reasons over it without any extra tool.
+- `{ slug, frontmatter, body }` — `frontmatter` includes the objective shared fields, among them `perishable_ingredients` (a normalized list of the recipe's perishable ingredients; empty when absent), `course` (the open-vocabulary dish-type array — `main | side | dessert | breakfast | …`; empty when absent), and `pairs_with` (slugs of suggested corpus sides). The `perishable_ingredients` and `course` fields also ride each entry's `frontmatter` from the index-backed `list_recipes`, so the menu-gen waste callout and the mains/sides faceting reason over them without any extra tool.
 
 ### `recipe_site_url()`
 
@@ -647,7 +648,7 @@ Return the current meal plan — recipes committed to cook next (transient cook 
 **Params:** none.
 
 **Returns:**
-- `{ planned: [{ recipe, planned_for }] }` (`planned_for` may be null)
+- `{ planned: [{ recipe, planned_for, sides? }] }` (`planned_for` may be null; `sides` is an optional array of free-text open-world side names riding on the main's row)
 
 **Notes:** The session-start stale-planned reconcile surfaces only **due** rows (`planned_for` on/before today, or unset).
 
@@ -671,7 +672,7 @@ Persist a batch of repo updates as **one** atomic git commit — no cart. The ev
   ready_to_eat_updates: [{ slug, updates }],          // addressed by slug in the caller's catalog
   config_updates:       [{ file, content }],          // file: preferences|taste|diet_principles|aliases
   cooking_log_entries:  [{ type, date?, recipe?, name?, protein?, cuisine? }],  // append cooked meals; date defaults to today
-  meal_plan_ops:        [{ op, recipe, planned_for? }],   // op: add | remove  (committed cook intent)
+  meal_plan_ops:        [{ op, recipe, planned_for?, sides? }],   // op: add | remove  (committed cook intent; sides = open-world sides on the main's row)
   grocery_list_ops:     [{ op, item?, name? }],           // op: add | update | remove  (SKU-free buy list)
   commit_message:       string
 }
@@ -680,7 +681,7 @@ All sections are optional except `commit_message`.
 
 **`cooking_log_entries` (cooking-history).** Appends to `cooking_log.toml`. `type` is `recipe | ready_to_eat | ad_hoc`; `recipe` is required for `type=recipe` (slug-only), `name` for the others. For each `type=recipe` entry, the recipe's `last_cooked` is **derived** (max log date for that slug) and co-written in the **same** commit — never set `last_cooked` via `recipe_updates`. Ready-to-eat consumption is a `{type:"ready_to_eat", name}` entry **plus** a `pantry_operations` `remove` when the user used the last of it (pantry is presence-based — there is no auto-decrement).
 
-**`meal_plan_ops` (meal-planning).** Mutates `meal_plan.toml`. `add` upserts by recipe slug (updating `planned_for`); `remove` drops the slug's row. Menu agreement writes `add` rows; cook-capture / the stale-planned reconcile write `remove`.
+**`meal_plan_ops` (meal-planning).** Mutates `meal_plan.toml`. `add` upserts by recipe slug (updating `planned_for`, and merging any open-world `sides` — free-text plate companions with no slug — onto the main's row as a deduped union); `remove` drops the slug's row (and its `sides`). A **corpus** side (a `course: side` recipe) gets its own `add` row instead of riding in `sides`. Menu agreement writes `add` rows; cook-capture / the stale-planned reconcile write `remove`.
 
 **`grocery_list_ops` (grocery-list).** Mutates the caller's `grocery_list.toml`. `add` carries the full `item` (`{ name, quantity?, kind?, domain?, source?, for_recipes?, note? }`) and MERGES by normalized name (union `for_recipes`, reconcile `quantity`) — including against an item added earlier in the same batch; `update` carries `name` + a partial `item` patch; `remove` carries `name`. Ops apply in array order. An `update`/`remove` for an absent name is reported in `summary.grocery_list.conflicts` (the rest of the batch still commits), not thrown. This is the batch path for multiple grocery-list mutations (a menu capture, a receive's removes) — the granular `add_/update_/remove_from_grocery_list` tools are for a single one-off edit, and multiple same-file writes are never parallelized.
 

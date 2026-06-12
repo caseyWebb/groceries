@@ -8,21 +8,39 @@ export interface PlannedItem {
   recipe: string;
   /** ISO date the cook is slated for; optional. */
   planned_for?: string | null;
+  /** Free-text open-world side names riding on this main's row; never slug-resolved. */
+  sides?: string[];
 }
 
 export interface MealPlanOp {
   op: "add" | "remove";
   recipe: string;
   planned_for?: string | null;
+  /** Open-world sides to attach to the (upserted) main's row on an `add`. */
+  sides?: string[];
 }
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export function coercePlanned(raw: Record<string, unknown>): PlannedItem {
-  return {
+  const item: PlannedItem = {
     recipe: typeof raw.recipe === "string" ? raw.recipe : "",
     planned_for: typeof raw.planned_for === "string" ? raw.planned_for : null,
   };
+  // sides is free-text open-world side names; carry it only when non-empty so plain
+  // rows stay clean (no `sides = []` on every planned row).
+  if (Array.isArray(raw.sides)) {
+    const sides = raw.sides.filter((s): s is string => typeof s === "string");
+    if (sides.length) item.sides = sides;
+  }
+  return item;
+}
+
+/** Union `add` into `existing`, preserving order and dropping exact duplicates. */
+function unionSides(existing: string[] | undefined, add: string[]): string[] {
+  const out = [...(existing ?? [])];
+  for (const s of add) if (!out.includes(s)) out.push(s);
+  return out;
 }
 
 /** Read the planned array out of a parsed meal_plan.toml (empty when absent). */
@@ -60,8 +78,15 @@ export function applyMealPlanOps(
 
     if (op.op === "add") {
       const existing = next.find((it) => sameRecipe(it.recipe, op.recipe));
-      if (existing) existing.planned_for = op.planned_for ?? existing.planned_for ?? null;
-      else next.push({ recipe: op.recipe, planned_for: op.planned_for ?? null });
+      if (existing) {
+        existing.planned_for = op.planned_for ?? existing.planned_for ?? null;
+        // Merge open-world sides onto the existing row (union, no duplicate row).
+        if (op.sides?.length) existing.sides = unionSides(existing.sides, op.sides);
+      } else {
+        const item: PlannedItem = { recipe: op.recipe, planned_for: op.planned_for ?? null };
+        if (op.sides?.length) item.sides = [...op.sides];
+        next.push(item);
+      }
       applied.push({ op: "add", recipe: op.recipe });
       continue;
     }

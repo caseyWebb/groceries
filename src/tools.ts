@@ -48,6 +48,7 @@ const recipeFiltersShape = {
   status: z.string().optional(),
   protein: z.string().optional(),
   cuisine: z.string().optional(),
+  course: z.string().optional(),
   query: z.string().optional(),
   season: z.array(z.string()).optional(),
   dietary: z.array(z.string()).optional(),
@@ -256,7 +257,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "list_recipes",
     {
       description:
-        "List recipes from the index, filtered. To find recipes by name or keyword (including a named dish), use `query` — the single text search over title AND tags: it keeps recipes whose title or tags contain EVERY token (case-insensitive substring), after dropping connective stopwords (so \"chicken and rice\" matches the same as \"chicken rice\", including a recipe titled \"Chicken and Rice\" whose tags omit \"rice\"). There is no tag filter. Array filters season/dietary match ALL listed values. status defaults to 'active'; pass 'all' to include every status. exclude_cooked_within_days is a caller-supplied window. A makeability gate is applied by default: recipes needing equipment the caller doesn't own (per kitchen.toml) are hidden — unless the caller has no kitchen inventory recorded, in which case nothing is gated. Pass include_unmakeable:true to instead return those recipes annotated with missing_equipment (use this when surfacing a specifically NAMED dish so it is never silently dropped).",
+        "List recipes from the index, filtered. To find recipes by name or keyword (including a named dish), use `query` — the single text search over title AND tags: it keeps recipes whose title or tags contain EVERY token (case-insensitive substring), after dropping connective stopwords (so \"chicken and rice\" matches the same as \"chicken rice\", including a recipe titled \"Chicken and Rice\" whose tags omit \"rice\"). There is no tag filter. Array filters season/dietary match ALL listed values. status defaults to 'active'; pass 'all' to include every status. course is an open-vocabulary facet (main | side | dessert | breakfast | …) matched by containment — `course: 'side'` returns every recipe whose course includes 'side', including a dual-use `[main, side]` dish. exclude_cooked_within_days is a caller-supplied window. A makeability gate is applied by default: recipes needing equipment the caller doesn't own (per kitchen.toml) are hidden — unless the caller has no kitchen inventory recorded, in which case nothing is gated. Pass include_unmakeable:true to instead return those recipes annotated with missing_equipment (use this when surfacing a specifically NAMED dish so it is never silently dropped).",
       inputSchema: { filters: z.object(recipeFiltersShape).optional() },
     },
     ({ filters }) =>
@@ -320,7 +321,7 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
     "read_recipe",
     {
       description:
-        "Read a single recipe's parsed frontmatter and markdown body by slug. Frontmatter includes `standalone` (true = a complete one-pot plate that needs no side) and `pairs_with` (slugs of sides remembered for this main).",
+        "Read a single recipe's parsed frontmatter and markdown body by slug. Frontmatter includes `course` (the open-vocabulary dish type — main | side | dessert | breakfast | …) and `pairs_with` (slugs of sides remembered for this main).",
       inputSchema: { slug: z.string() },
     },
     ({ slug }) =>

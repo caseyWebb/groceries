@@ -16,9 +16,12 @@ describe("validateFile", () => {
     expect(() => validateFile("recipes/x.md", "no frontmatter here")).toThrowError(/fence/);
   });
 
-  it("accepts a well-formed pairs_with array and a boolean standalone", () => {
+  it("accepts a well-formed pairs_with array and a course (scalar or array)", () => {
     expect(() =>
-      validateFile("recipes/x.md", "---\nstatus: active\npairs_with: [steamed-rice]\nstandalone: true\n---\nbody\n"),
+      validateFile("recipes/x.md", "---\nstatus: active\npairs_with: [steamed-rice]\ncourse: main\n---\nbody\n"),
+    ).not.toThrow();
+    expect(() =>
+      validateFile("recipes/x.md", "---\nstatus: active\ncourse: [main, side]\n---\nbody\n"),
     ).not.toThrow();
   });
 
@@ -28,10 +31,22 @@ describe("validateFile", () => {
     ).toThrowError(/pairs_with/);
   });
 
-  it("rejects a non-boolean standalone", () => {
+  it("rejects a course that is neither a string nor an array of strings", () => {
+    expect(() =>
+      validateFile("recipes/x.md", "---\nstatus: active\ncourse: 3\n---\nbody\n"),
+    ).toThrowError(/course/);
+  });
+
+  it("accepts an off-convention course value (open vocabulary)", () => {
+    expect(() =>
+      validateFile("recipes/x.md", "---\nstatus: active\ncourse: [sauce]\n---\nbody\n"),
+    ).not.toThrow();
+  });
+
+  it("ignores a lingering retired standalone field", () => {
     expect(() =>
       validateFile("recipes/x.md", "---\nstatus: active\nstandalone: yes-please\n---\nbody\n"),
-    ).toThrowError(/standalone/);
+    ).not.toThrow();
   });
 
   it("accepts a well-formed perishable_ingredients array", () => {
@@ -125,6 +140,15 @@ describe("validateFile", () => {
     expect(() =>
       validateFile("meal_plan.toml", '[[planned]]\nrecipe = "x"\nplanned_for = "soon"\n'),
     ).toThrowError(/planned_for/);
+  });
+
+  it("validates open-world sides on a planned row: array of strings only", () => {
+    expect(() =>
+      validateFile("meal_plan.toml", '[[planned]]\nrecipe = "x"\nsides = ["roasted broccoli", "white rice"]\n'),
+    ).not.toThrow();
+    expect(() =>
+      validateFile("meal_plan.toml", '[[planned]]\nrecipe = "x"\nsides = "roasted broccoli"\n'),
+    ).toThrowError(/sides/);
   });
 
   it("validates the per-tenant ready_to_eat catalog: name, slug, meal, status, rating", () => {

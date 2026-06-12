@@ -151,7 +151,7 @@ test('soft: missing recommended fields warns but does not fail', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-// --- pairs_with (plating edge) + standalone gate ------------------------
+// --- pairs_with (plating edge) + course facet ---------------------------
 
 test('resolved pairs_with passes and is carried into the index as an array', async () => {
   const dir = await tmpRecipes({
@@ -175,34 +175,64 @@ test('hard-fail: pairs_with references an unknown recipe', async () => {
   await rm(dir, { recursive: true, force: true });
 });
 
-test('hard-fail: non-boolean standalone', async () => {
+test('course: scalar is normalized to a lowercased, trimmed array', async () => {
   const dir = await tmpRecipes({
-    'bad.md': recipe('title: Bad\nstatus: active\nstandalone: yes-please'),
-  });
-  const { errors } = await buildRecipeIndexes(dir);
-  assert.ok(errors.some((e) => /standalone must be a boolean/.test(e)), errors.join('\n'));
-  await rm(dir, { recursive: true, force: true });
-});
-
-test('standalone: true passes and is carried into the index', async () => {
-  const dir = await tmpRecipes({
-    'chili.md': recipe('title: Chili\nstatus: active\nprotein: beef\ntime_total: 60\ningredients_key: [beef]\nstandalone: true'),
+    'roast.md': recipe('title: Roast\nstatus: active\ncourse: Main'),
   });
   const { recipes, errors } = await buildRecipeIndexes(dir);
   assert.deepEqual(errors, []);
-  assert.equal(recipes['chili'].standalone, true);
+  assert.deepEqual(recipes['roast'].course, ['main']);
   await rm(dir, { recursive: true, force: true });
 });
 
-test('absent pairs_with / standalone do not warn', async () => {
+test('course: array is lowercased and trimmed (dual-use)', async () => {
+  const dir = await tmpRecipes({
+    'grain-salad.md': recipe('title: Grain Salad\nstatus: active\ncourse: ["Main", " Side "]'),
+  });
+  const { recipes, errors } = await buildRecipeIndexes(dir);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(recipes['grain-salad'].course, ['main', 'side']);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('course: an off-convention value passes (open vocabulary)', async () => {
+  const dir = await tmpRecipes({
+    'chimichurri.md': recipe('title: Chimichurri\nstatus: active\ncourse: [sauce]'),
+  });
+  const { recipes, errors } = await buildRecipeIndexes(dir);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(recipes['chimichurri'].course, ['sauce']);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('hard-fail: course present but not a string/array', async () => {
+  const dir = await tmpRecipes({
+    'bad.md': recipe('title: Bad\nstatus: active\ncourse: 3'),
+  });
+  const { errors } = await buildRecipeIndexes(dir);
+  assert.ok(errors.some((e) => /course must be a string or an array of strings/.test(e)), errors.join('\n'));
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('absent pairs_with / course do not warn; course defaults to empty', async () => {
   const dir = await tmpRecipes({
     'plain.md': recipe('title: Plain\nstatus: active\nprotein: chicken\ntime_total: 30\ningredients_key: [chicken]'),
   });
   const { recipes, errors, warnings } = await buildRecipeIndexes(dir);
   assert.deepEqual(errors, []);
-  assert.ok(!warnings.some((w) => /pairs_with|standalone/.test(w)), warnings.join('\n'));
-  // standalone stays unset (not coerced to false) when absent.
-  assert.equal(recipes['plain'].standalone, undefined);
+  assert.ok(!warnings.some((w) => /pairs_with|course/.test(w)), warnings.join('\n'));
+  assert.deepEqual(recipes['plain'].course, []);
+  await rm(dir, { recursive: true, force: true });
+});
+
+test('retired standalone field is ignored: no fail, not projected', async () => {
+  const dir = await tmpRecipes({
+    // a now-retired field with any value — must not fail the build, must not appear in the index
+    'chili.md': recipe('title: Chili\nstatus: active\nprotein: beef\ntime_total: 60\ningredients_key: [beef]\nstandalone: yes-please'),
+  });
+  const { recipes, errors } = await buildRecipeIndexes(dir);
+  assert.deepEqual(errors, []);
+  assert.equal(recipes['chili'].standalone, undefined);
   await rm(dir, { recursive: true, force: true });
 });
 
@@ -459,6 +489,25 @@ test('cooking artifacts: valid log + plan produce no errors', () => {
     mealPlan: { planned: [{ recipe: 'salmon', planned_for: '2026-06-12' }] },
   });
   assert.deepEqual(errors, []);
+});
+
+test('cooking artifacts: free-text sides on a planned row pass and are not slug-resolved', () => {
+  const { errors } = validateCookingArtifacts({
+    recipes: recipesFixture,
+    cookingLog: { entries: [] },
+    // "roasted broccoli" resolves to no slug — must NOT be treated as a recipe reference.
+    mealPlan: { planned: [{ recipe: 'salmon', planned_for: '2026-06-12', sides: ['roasted broccoli'] }] },
+  });
+  assert.deepEqual(errors, []);
+});
+
+test('cooking artifacts: hard-fail on non-array sides', () => {
+  const { errors } = validateCookingArtifacts({
+    recipes: recipesFixture,
+    cookingLog: { entries: [] },
+    mealPlan: { planned: [{ recipe: 'salmon', sides: 'roasted broccoli' }] },
+  });
+  assert.ok(errors.some((e) => /sides must be an array of side names/.test(e)), errors.join('\n'));
 });
 
 test('cooking artifacts: hard-fail on unknown type, unresolved slugs, bad dates', () => {

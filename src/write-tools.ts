@@ -510,7 +510,7 @@ export function registerWriteTools(server: McpServer, gh: GitHubClient, userPref
     "commit_changes",
     {
       description:
-        "Persist a batch of repo updates as ONE commit (no cart). This is the DEFAULT for any turn that makes more than one repo write — batch them here instead of calling the granular tools repeatedly, and never fire parallel writes at the same file (they full-file-clobber each other). recipe_updates split automatically: objective frontmatter/body → shared recipe content; rating/status → the caller's personal overlay. cooking_log_entries append cooked meals (date defaults to today); last_cooked is DERIVED from the log at read time — never set it by hand. meal_plan_ops add/remove committed cook intent. grocery_list_ops add/update/remove buy-list items in the same commit (same-name add merges; a missing-name update/remove is reported as a conflict, not an error). Ready-to-eat consumption is a cooking_log_entries {type:'ready_to_eat'} plus a pantry_operations remove when the user used the last of it.",
+        "Persist a batch of repo updates as ONE commit (no cart). This is the DEFAULT for any turn that makes more than one repo write — batch them here instead of calling the granular tools repeatedly, and never fire parallel writes at the same file (they full-file-clobber each other). recipe_updates split automatically: objective frontmatter/body → shared recipe content; rating/status → the caller's personal overlay. cooking_log_entries append cooked meals (date defaults to today); last_cooked is DERIVED from the log at read time — never set it by hand. meal_plan_ops add/remove committed cook intent (an `add` may carry free-text open-world `sides` that ride on the main's row; corpus sides get their own row). grocery_list_ops add/update/remove buy-list items in the same commit (same-name add merges; a missing-name update/remove is reported as a conflict, not an error). Ready-to-eat consumption is a cooking_log_entries {type:'ready_to_eat'} plus a pantry_operations remove when the user used the last of it.",
       inputSchema: {
         recipe_updates: z
           .array(z.object({ slug: z.string(), updates: z.record(z.string(), z.unknown()) }))
@@ -562,6 +562,8 @@ export function registerWriteTools(server: McpServer, gh: GitHubClient, userPref
               op: z.enum(["add", "remove"]),
               recipe: z.string(),
               planned_for: z.string().nullable().optional(),
+              // Open-world sides (free text) to attach to the main's row on an `add`.
+              sides: z.array(z.string()).optional(),
             }),
           )
           .optional(),

@@ -8,6 +8,7 @@ const index: RecipeIndex = {
     status: "active",
     protein: "beef",
     cuisine: "american",
+    course: ["main"],
     tags: ["weeknight", "beef", "one-pot"],
     season: ["fall"],
     dietary: ["dairy-free"],
@@ -20,6 +21,7 @@ const index: RecipeIndex = {
     status: "active",
     protein: "chicken",
     cuisine: "italian",
+    course: ["main", "side"], // dual-use
     tags: ["weeknight"],
     season: [],
     dietary: [],
@@ -31,6 +33,7 @@ const index: RecipeIndex = {
     title: "Draft One",
     status: "draft",
     protein: "beef",
+    course: ["side"],
     tags: ["beef"],
     time_total: 20,
     last_cooked: "2025-01-01",
@@ -63,6 +66,29 @@ describe("filterRecipes", () => {
     // requires BOTH values → active1 has only "dairy-free" → excluded
     expect(filterRecipes(index, { dietary: ["dairy-free", "gluten-free"] }, NOW).map((r) => r.slug)).toEqual([]);
     expect(filterRecipes(index, { season: ["fall"] }, NOW).map((r) => r.slug)).toEqual(["active1"]);
+  });
+
+  it("course matches by containment, including dual-use recipes", () => {
+    // active1 [main], active2 [main, side] → both are mains
+    expect(filterRecipes(index, { course: "main" }, NOW).map((r) => r.slug).sort()).toEqual([
+      "active1",
+      "active2",
+    ]);
+    // active2 [main, side] is the only active side; draft1 [side] is filtered out by status
+    expect(filterRecipes(index, { course: "side" }, NOW).map((r) => r.slug)).toEqual(["active2"]);
+    // case/whitespace-insensitive; an open value with no match returns nothing
+    expect(filterRecipes(index, { course: " Side ", status: "all" }, NOW).map((r) => r.slug).sort()).toEqual([
+      "active2",
+      "draft1",
+    ]);
+    expect(filterRecipes(index, { course: "dessert" }, NOW).map((r) => r.slug)).toEqual([]);
+  });
+
+  it("course is ANDed with other filters", () => {
+    // course main AND cuisine italian → only active2
+    expect(filterRecipes(index, { course: "main", cuisine: "italian" }, NOW).map((r) => r.slug)).toEqual([
+      "active2",
+    ]);
   });
 
   it("tags is no longer a filter — passing it is ignored", () => {

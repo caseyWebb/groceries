@@ -87,6 +87,15 @@ export function normalizeValue(value) {
   return value;
 }
 
+// Normalize a recipe's open-vocabulary `course` to a lowercased, trimmed array of
+// strings, accepting a bare string or an array. Returns [] for absent/empty. Shape
+// and casing only — values are never checked against a set, so the facet stays open.
+export function normalizeCourse(value) {
+  if (value == null) return [];
+  const arr = Array.isArray(value) ? value : [value];
+  return arr.map((c) => String(c).trim().toLowerCase()).filter((c) => c.length > 0);
+}
+
 // Deterministic JSON: recursively sort object keys, 2-space indent, trailing newline.
 export function stableStringify(value) {
   const sort = (v) => {
@@ -178,14 +187,22 @@ export async function buildRecipeIndexes(recipesDir) {
 
     // pairs_with is a PLATING edge (recipes eaten together on one plate), distinct
     // from the produces/uses PRODUCTION edges. Array of recipe slugs; slug
-    // resolution is checked once all recipes are collected (below). standalone is
-    // the optional already-rounded-plate gate — a boolean when present, unset by
-    // default (never backfilled), so absence is not warned.
+    // resolution is checked once all recipes are collected (below).
     if (data.pairs_with != null && !Array.isArray(data.pairs_with)) {
       errors.push(`${rel}: pairs_with must be an array of recipe slugs (got ${JSON.stringify(data.pairs_with)})`);
     }
-    if (data.standalone != null && typeof data.standalone !== 'boolean') {
-      errors.push(`${rel}: standalone must be a boolean (got ${JSON.stringify(data.standalone)})`);
+    // course is an OPEN-vocabulary facet (main | side | dessert | breakfast | …) —
+    // what kind of dish this is, classified at import. Shape-only check: a string or
+    // an array of strings. The VALUE is never checked against a set (unlike
+    // protein/cuisine), so the facet stays expandable without a code change. Absence
+    // reads as [] and is never warned. (`standalone` is retired — no longer a
+    // recognized field; a lingering value is ignored, never validated or projected.)
+    if (
+      data.course != null &&
+      typeof data.course !== 'string' &&
+      !(Array.isArray(data.course) && data.course.every((c) => typeof c === 'string'))
+    ) {
+      errors.push(`${rel}: course must be a string or an array of strings (got ${JSON.stringify(data.course)})`);
     }
     // perishable_ingredients is objective shared content (a normalized list of the
     // recipe's perishable ingredients, classified at import) consumed by the
@@ -217,15 +234,19 @@ export async function buildRecipeIndexes(recipesDir) {
     }
 
     // Emit objective content only — strip the per-tenant subjective fields so the
-    // shared index never carries one tenant's rating/status/last_cooked.
+    // shared index never carries one tenant's rating/status/last_cooked. `standalone`
+    // is a retired field (whether a main is already a rounded plate is inferred at
+    // plan time, not persisted); strip any lingering value so it never reaches the index.
     const objective = { ...data };
     for (const f of SUBJECTIVE_FIELDS) delete objective[f];
+    delete objective.standalone;
     recipes[slug] = normalizeValue({
       ...objective,
       slug,
       pairs_with: Array.isArray(data.pairs_with) ? data.pairs_with : [],
       perishable_ingredients: Array.isArray(data.perishable_ingredients) ? data.perishable_ingredients : [],
       requires_equipment: Array.isArray(data.requires_equipment) ? data.requires_equipment : [],
+      course: normalizeCourse(data.course),
     });
   }
 
@@ -401,6 +422,12 @@ export function validateCookingArtifacts({ recipes, cookingLog, mealPlan }) {
     }
     if (p.planned_for != null && isoOf(p.planned_for) === null) {
       errors.push(`${where}: invalid planned_for (${JSON.stringify(p.planned_for)})`);
+    }
+    // sides is an optional array of FREE-TEXT open-world side names (no slug) riding
+    // on the main's row — shape-only, never slug-resolved. Present-but-not-a-string-
+    // array is a hard failure (like a non-array perishable_ingredients).
+    if (p.sides != null && (!Array.isArray(p.sides) || p.sides.some((s) => typeof s !== 'string'))) {
+      errors.push(`${where}: sides must be an array of side names (got ${JSON.stringify(p.sides)})`);
     }
   });
 

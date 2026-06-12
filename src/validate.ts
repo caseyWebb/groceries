@@ -81,16 +81,22 @@ export function validateFile(path: string, content: string): void {
   if (path.startsWith("recipes/") && path.endsWith(".md")) {
     const fm = parseFrontmatterOrFail(path, content);
     if ("status" in fm) checkEnum(path, "status", fm.status, RECIPE_STATUSES, false);
-    // pairs_with (plating edge) is an array of recipe slugs; standalone is an
-    // optional boolean gate. Slug *resolution* is the post-push build's job (no
-    // corpus on workerd) — here we only enforce the local shape, parallel to status.
+    // pairs_with (plating edge) is an array of recipe slugs; course is an
+    // open-vocabulary facet (a string or array of strings). Slug *resolution* and
+    // course *value* policy are the post-push build's job (no corpus on workerd) —
+    // here we only enforce local shape, parallel to status. (`standalone` is retired:
+    // no longer recognized, so a lingering value passes through untouched.)
     if (fm.pairs_with != null) {
       if (!Array.isArray(fm.pairs_with) || fm.pairs_with.some((s) => typeof s !== "string")) {
         fail(path, `\`pairs_with\` must be an array of recipe slugs (got ${JSON.stringify(fm.pairs_with)})`);
       }
     }
-    if (fm.standalone != null && typeof fm.standalone !== "boolean") {
-      fail(path, `\`standalone\` must be a boolean (got ${JSON.stringify(fm.standalone)})`);
+    if (
+      fm.course != null &&
+      typeof fm.course !== "string" &&
+      !(Array.isArray(fm.course) && fm.course.every((c) => typeof c === "string"))
+    ) {
+      fail(path, `\`course\` must be a string or an array of strings (got ${JSON.stringify(fm.course)})`);
     }
     // perishable_ingredients (objective shared content) is a normalized array of
     // ingredient names; same shape-only check as pairs_with (no corpus on workerd).
@@ -167,6 +173,11 @@ export function validateFile(path: string, content: string): void {
       }
       if (p.planned_for != null && (typeof p.planned_for !== "string" || !ISO_DATE_RE.test(p.planned_for))) {
         fail(path, `planned entry has an invalid \`planned_for\`: ${JSON.stringify(p.planned_for)}`);
+      }
+      // `sides` (optional) holds free-text open-world side names riding on the main's
+      // row — shape-only (array of strings), never slug-resolved.
+      if (p.sides != null && (!Array.isArray(p.sides) || p.sides.some((s) => typeof s !== "string"))) {
+        fail(path, `planned entry \`sides\` must be an array of side names (got ${JSON.stringify(p.sides)})`);
       }
     }
     return;
