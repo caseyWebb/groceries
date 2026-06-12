@@ -91,12 +91,12 @@ The menu-generation flow SHALL be validated by a scripted smoke test of three se
 
 ### Requirement: Discovery surfaced during menu requests
 
-On a menu request, the agent SHALL surface a small number of new discoveries — roughly one to two candidate recipes (from `fetch_rss_discoveries`) and one to two ready-to-eat candidates (from on-sale items in the existing `kroger_flyer` pre-pass call). Recipe discoveries the user shows no objection to SHALL be imported immediately in draft state (`import_recipe` → agent enrichment → `create_recipe`), not deferred until the user expresses interest in this conversation. Ready-to-eat candidates SHALL be deduped against the caller's own `users/<username>/ready_to_eat.toml` catalog by the agent and drafted via `add_draft_ready_to_eat` (which writes that per-tenant catalog). Discovery SHALL NOT block or dominate the menu proposal — it is a side channel, surfaced as 1–2 callouts.
+On a menu request, the agent SHALL surface a small number of new discoveries — roughly one to two candidate recipes (from `fetch_rss_discoveries`) and one to two ready-to-eat candidates (from on-sale items in the existing `kroger_flyer` pre-pass call). Recipe discoveries the user shows no objection to SHALL be imported immediately in draft state (`parse_recipe` → agent enrichment → `create_recipe`), not deferred until the user expresses interest in this conversation. Ready-to-eat candidates SHALL be deduped against the caller's own `users/<username>/ready_to_eat.toml` catalog by the agent and drafted via `add_draft_ready_to_eat` (which writes that per-tenant catalog). Discovery SHALL NOT block or dominate the menu proposal — it is a side channel, surfaced as 1–2 callouts.
 
 #### Scenario: Menu request surfaces and drafts recipe discoveries
 
 - **WHEN** the agent assembles a menu proposal and `fetch_rss_discoveries` returns fresh candidates
-- **THEN** the agent surfaces ~1–2 of them and imports the chosen ones in draft via `import_recipe` + `create_recipe`, without waiting for the user to ask
+- **THEN** the agent surfaces ~1–2 of them and imports the chosen ones in draft via `parse_recipe` + `create_recipe`, without waiting for the user to ask
 
 #### Scenario: On-sale ready-to-eat item not already cataloged is drafted
 
@@ -186,7 +186,7 @@ When assembling a menu, the agent SHALL round out each main that is not an alrea
 
 ### Requirement: Side pairing bootstrap when the edge is empty
 
-When a non-standalone main has an empty `pairs_with`, the agent SHALL bootstrap a pairing at plan time: it SHALL search for a suitable savory side, preferring existing corpus recipes (via `list_recipes`), then the RSS discovery pool (`fetch_rss_discoveries`), then a web import (`import_recipe`); it SHALL propose at most two candidate sides in chat; and on the user accepting a side it SHALL ensure the side exists as a recipe (importing it as a `status: draft` recipe via the discovery path when it does not already exist) and SHALL record the pairing by adding the side's slug to the main's `pairs_with` through `update_recipe`. The recorded edge is shared content, so a later menu request for the same main SHALL find the pairing already present and surface it without re-bootstrapping. The bootstrap SHALL select sides by plate fit.
+When a non-standalone main has an empty `pairs_with`, the agent SHALL bootstrap a pairing at plan time: it SHALL search for a suitable savory side, preferring existing corpus recipes (via `list_recipes`), then the RSS discovery pool (`fetch_rss_discoveries`), then a web parse (`parse_recipe`); it SHALL propose at most two candidate sides in chat; and on the user accepting a side it SHALL ensure the side exists as a recipe (importing it as a `status: draft` recipe via the discovery path when it does not already exist) and SHALL record the pairing by adding the side's slug to the main's `pairs_with` through `update_recipe`. The recorded edge is shared content, so a later menu request for the same main SHALL find the pairing already present and surface it without re-bootstrapping. The bootstrap SHALL select sides by plate fit.
 
 #### Scenario: Empty pairs_with bootstraps a side
 
