@@ -125,6 +125,27 @@ Append an attributed note to a recipe (shared or personal) in the caller's notes
 **Errors (structured):**
 - `{ error: "validation_failed" }` — malformed slug or empty body.
 
+### `update_recipe_note(slug, created_at, body?, tags?, private?)`
+
+Edit one of the caller's **own** notes, addressed by its `created_at` (from `add_recipe_note` / `read_recipe_notes`). Only the fields passed change; `created_at` is the immutable key. **Self-scoped** — it reads the caller's own subtree, so it can only touch a note the caller authored. Shared recipe content and other tenants' notes are untouched. (Relaxes the append-only posture for your own notes.)
+
+**Returns:**
+- `{ slug, author, created_at, commit_sha }`
+
+**Errors (structured):**
+- `{ error: "validation_failed" }` — malformed slug or empty body.
+- `{ error: "not_found" }` — no note of the caller's on that slug with that `created_at`.
+
+### `remove_recipe_note(slug, created_at)`
+
+Delete one of the caller's **own** notes, addressed by its `created_at`. Self-scoped to the caller's subtree; shared content and other tenants' notes are untouched.
+
+**Returns:**
+- `{ slug, removed: true, created_at, commit_sha }`
+
+**Errors (structured):**
+- `{ error: "not_found" }` — no note of the caller's on that slug with that `created_at`.
+
 ### `read_recipe_notes(slug)`
 
 Read the **group's** notes and ratings for a recipe — the collaborative-cookbook view. Aggregated across everyone in the group at read time (the tenant directory → each member's subtree).
@@ -303,56 +324,55 @@ Remove an item by name.
 
 ## Store tools (in-store fulfillment)
 
-The **second fulfillment flush**: a store-walk turns the same SKU-free grocery list into an aisle-ordered shopping list for a specific store (vs. `place_order`'s Kroger online flush). Stores live in the **shared corpus** (`stores/<slug>.toml`, keyed by location); any MCP holder may map or edit one with no extra gate (the `update_discovery_sources` posture). There is **no `stores` index** — the set is small, so `list_stores` reads the directory. Objective store content is **unattributed** (like recipe content); freeform observations are attributed store notes (`add_store_note` / `read_store_notes`). See `docs/SCHEMAS.md` for the `stores/<slug>.toml` and `store_notes/<slug>.toml` schemas.
+The **second fulfillment flush**: the `shopping-list` skill groups the same SKU-free grocery list for a specific store — by aisle when it's mapped, by department otherwise (vs. `place_order`'s Kroger online flush). The `stores/` registry holds **identity only** (`stores/<slug>.toml`, keyed by location, **shared/unattributed**); any MCP holder may register or edit one with no extra gate (the `update_discovery_sources` posture). There is **no `stores` index** — the set is small, so `list_stores` reads the directory. **Store layout lives in attributed store notes**, not the registry: aisle order (`layout`-tagged), where-it-hides hints (`location`), and not-carried entries (`stock`) are all `add_store_note` / `read_store_notes` — one surface for everything we know about a store. See `docs/SCHEMAS.md` for the `stores/<slug>.toml` and `store_notes/<slug>.toml` schemas.
 
 ### `list_stores()`
 
-List the mapped stores. Reads the shared `stores/` directory directly; an absent/empty registry returns `{ stores: [] }` (the walk still works, degraded).
+List the registered stores (identity only). Reads the shared `stores/` directory directly; an absent/empty registry returns `{ stores: [] }` (the walk still works, degraded). To tell whether a store has a usable aisle map, read its `layout`-tagged store notes (`read_store_notes`), not this list.
 
 **Returns:**
-- `{ stores: [{ slug, name, label?, domain, has_layout }] }` — `has_layout` is true when the store has an aisle map.
+- `{ stores: [{ slug, name, label?, domain }] }` — identity only.
 
 ### `read_store(slug)`
 
-Read one store's objective content: identity (`name`, `label?`, `chain?`, `address?`, `domain`), the ordered `aisles` layout, the sparse `item_locations`, and `doesnt_carry`.
+Read one store's **identity**: `name`, `label?`, `chain?`, `address?`, `domain`. Layout and observations are not here — they're attributed store notes; use `read_store_notes` for the aisle map (`layout`), where-it-hides hints (`location`), not-carried entries (`stock`), and freeform notes (hours, parking).
 
 **Params:**
 - `slug` (string, required)
 
 **Returns:**
-- `{ slug, name, label?, chain?, address?, domain, aisles, item_locations, doesnt_carry }`
+- `{ slug, name, label?, chain?, address?, domain }`
 
 **Errors (structured):**
 - `{ error: "not_found" }` — unknown (or malformed) slug.
 
-### `add_store(slug, name, label?, chain?, address?, domain?, aisles?, item_locations?, doesnt_carry?)`
+### `add_store(slug, name, label?, chain?, address?, domain?)`
 
-Map a new store location. `slug` is a kebab-case **location** id (`west-7th-tom-thumb`, not `tom-thumb`). `domain` defaults to `"grocery"`. `aisles`/`item_locations`/`doesnt_carry` are usually omitted at creation and grown from the walk. `item_location` `item` keys are normalized (same matcher as pantry verify). Persists via the atomic commit engine.
+Register a new store location — **identity only**. `slug` is a kebab-case **location** id (`west-7th-tom-thumb`, not `tom-thumb`). `domain` defaults to `"grocery"`. Layout is **not** set here — map a store by recording `layout`-tagged store notes (`add_store_note`) as you walk it. Persists via the atomic commit engine.
 
 **Returns:**
 - `{ store, commit_sha }`
 
 **Errors (structured):**
 - `{ error: "validation_failed" }` — invalid slug or empty name.
-- `{ error: "slug_exists" }` — the slug is already mapped (edit with `update_store`).
+- `{ error: "slug_exists" }` — the slug is already registered (edit with `update_store`).
 
 ### `update_store(slug, operations)`
 
-Edit a mapped store with operations (`update_pantry`/`update_kitchen` style). One tool covers identity edits, the whole aisle layout, **and** the lazy facet growth:
+Edit a registered store's **identity** with operations (`update_pantry`/`update_kitchen` style):
 - `{ op: "set_identity", field, value }` — `field` ∈ `name | label | chain | address | domain`.
-- `{ op: "set_aisles", aisles: [{ number?, label?, sections[] }] }` — replaces the whole ordered layout (the first-visit mapping path).
-- `{ op: "add_item_location", item, aisle, detail? }` / `{ op: "remove_item_location", item }` — the sparse where-it-hides hints (`item` normalized → synonyms resolve to one key; an add re-points an existing key).
-- `{ op: "add_doesnt_carry", item }` / `{ op: "remove_doesnt_carry", item }` — the sparse not-carried set (a found item clears its entry).
+
+There are no aisle / item-location / not-carried ops — layout is notes now (`add_store_note` with `layout`/`location`/`stock` tags).
 
 **Returns:**
-- `{ slug, applied: [...], conflicts: [...], commit_sha? }` — `conflicts` reports e.g. a remove whose target isn't present; no commit when nothing applied.
+- `{ slug, applied: [...], conflicts: [...], commit_sha? }` — `conflicts` reports e.g. an unsettable field; no commit when nothing applied.
 
 **Errors (structured):**
 - `{ error: "not_found" }` — unknown slug.
 
 ### `remove_store(slug)`
 
-Remove a mapped store (deletes `stores/<slug>.toml` atomically). Members' attributed store notes are left untouched.
+Remove a registered store (deletes `stores/<slug>.toml` atomically). Members' attributed store notes are left untouched.
 
 **Returns:**
 - `{ slug, removed: true, commit_sha }`
@@ -362,7 +382,7 @@ Remove a mapped store (deletes `stores/<slug>.toml` atomically). Members' attrib
 
 ### `add_store_note(slug, body, tags?, private?)`
 
-Append an attributed note to a store — the store analog of `add_recipe_note`. For both objective observations ("fish counter closes at 6 PM") and personal ones ("they stock the Kerrygold I like"). Append-mostly; authored in the caller's `users/<id>/store_notes/<slug>.toml` (structural authorship). Objective *structured* facts (an item's aisle, a not-carried item) belong in the shared store via `update_store`; a note is for freeform observations.
+Append an attributed note to a store — the single home for everything we know about it. Freeform observations ("fish counter closes at 6 PM", "they stock the Kerrygold I like") **and** layout, by tag convention: `layout` for an aisle + its sections (lead the body with the aisle number — `"Aisle 7: baking, spices"` — the number order is the walk path); `location` for where a non-obvious item hides; `stock` for a not-carried item. Append-mostly; authored in the caller's `users/<id>/store_notes/<slug>.toml` (structural authorship).
 
 **Params:**
 - `slug` (string, required), `body` (string, required), `tags` (array, optional), `private` (boolean, optional — default `false`).
@@ -373,9 +393,30 @@ Append an attributed note to a store — the store analog of `add_recipe_note`. 
 **Errors (structured):**
 - `{ error: "validation_failed" }` — malformed slug or empty body.
 
+### `update_store_note(slug, created_at, body?, tags?, private?)`
+
+Edit one of the caller's **own** store notes, addressed by its `created_at` (from `add_store_note` / `read_store_notes`). Only the fields passed change; `created_at` is the immutable key. **Self-scoped** — it reads the caller's own subtree, so it can only touch a note the caller authored. The clean-correction path for a stale `layout` note after a remodel.
+
+**Returns:**
+- `{ slug, author, created_at, commit_sha }`
+
+**Errors (structured):**
+- `{ error: "validation_failed" }` — malformed slug or empty body.
+- `{ error: "not_found" }` — no note of the caller's on that slug with that `created_at`.
+
+### `remove_store_note(slug, created_at)`
+
+Delete one of the caller's **own** store notes, addressed by its `created_at` — e.g. drop a pre-remodel `layout` note. Self-scoped to the caller's subtree; other tenants' notes are untouched.
+
+**Returns:**
+- `{ slug, removed: true, created_at, commit_sha }`
+
+**Errors (structured):**
+- `{ error: "not_found" }` — no note of the caller's on that slug with that `created_at`.
+
 ### `read_store_notes(slug)`
 
-Read the **group's** attributed notes for a store, aggregated across everyone at read time. The caller sees their **own** private notes plus **everyone's shared** notes; another member's `private` note is never returned.
+Read the **group's** attributed notes for a store, aggregated across everyone at read time. The caller sees their **own** private notes plus **everyone's shared** notes; another member's `private` note is never returned. Carries both freeform notes and layout (`layout`/`location`/`stock` tags); where two notes conflict (e.g. a remodel), prefer the most recent by `created_at`.
 
 **Params:**
 - `slug` (string, required)

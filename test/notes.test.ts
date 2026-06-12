@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   parseNotes,
   appendNote,
+  removeNote,
+  updateNote,
   serializeNotes,
   serializeStoreNotes,
   notesPath,
@@ -51,6 +53,58 @@ describe("appendNote", () => {
     expect(out).toHaveLength(2);
     expect(out[0].body).toBe("first");
     expect(out[1].body).toBe("second");
+  });
+});
+
+describe("removeNote", () => {
+  const a = note({ created_at: "2026-06-01T00:00:00.000Z", body: "first" });
+  const b = note({ created_at: "2026-06-02T00:00:00.001Z", body: "second" });
+
+  it("drops the note matching created_at and reports found", () => {
+    const { notes, found } = removeNote([a, b], "2026-06-01T00:00:00.000Z");
+    expect(found).toBe(true);
+    expect(notes).toEqual([b]);
+  });
+
+  it("is a no-op (found: false) when no note matches", () => {
+    const { notes, found } = removeNote([a, b], "nope");
+    expect(found).toBe(false);
+    expect(notes).toEqual([a, b]);
+  });
+
+  it("leaves the rest intact when removing from the middle", () => {
+    const c = note({ created_at: "2026-06-03T00:00:00.002Z", body: "third" });
+    const { notes } = removeNote([a, b, c], "2026-06-02T00:00:00.001Z");
+    expect(notes).toEqual([a, c]);
+  });
+});
+
+describe("updateNote", () => {
+  const a = note({ created_at: "2026-06-01T00:00:00.000Z", body: "Aisle 7: baking", tags: ["layout"] });
+  const b = note({ created_at: "2026-06-02T00:00:00.001Z", body: "keep me" });
+
+  it("patches only the provided fields, keeping created_at as the key", () => {
+    const { notes, found } = updateNote([a, b], "2026-06-01T00:00:00.000Z", { body: "Aisle 7: baking, spices" });
+    expect(found).toBe(true);
+    expect(notes[0]).toEqual({ ...a, body: "Aisle 7: baking, spices" });
+    expect(notes[1]).toEqual(b);
+  });
+
+  it("can set private to false explicitly (not swallowed by ??)", () => {
+    const priv = note({ created_at: "t", body: "x", private: true });
+    const { notes } = updateNote([priv], "t", { private: false });
+    expect(notes[0].private).toBe(false);
+  });
+
+  it("can replace tags", () => {
+    const { notes } = updateNote([a, b], "2026-06-01T00:00:00.000Z", { tags: ["location"] });
+    expect(notes[0].tags).toEqual(["location"]);
+  });
+
+  it("is a no-op (found: false) when no note matches", () => {
+    const { notes, found } = updateNote([a, b], "nope", { body: "x" });
+    expect(found).toBe(false);
+    expect(notes).toEqual([a, b]);
   });
 });
 

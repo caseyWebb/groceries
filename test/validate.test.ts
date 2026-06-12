@@ -77,24 +77,22 @@ describe("validateFile", () => {
     ).toThrowError(/domain/);
   });
 
-  it("validates a store: requires slug+name, checks aisles/item_locations/doesnt_carry shapes", () => {
+  it("validates a store: requires slug+name, domain a string; layout is notes now", () => {
     expect(() =>
-      validateFile(
-        "stores/west-7th-tom-thumb.toml",
-        'slug = "west-7th-tom-thumb"\nname = "Tom Thumb"\ndomain = "grocery"\n[[aisles]]\nnumber = 1\nsections = ["produce"]\n[[item_locations]]\nitem = "tahini"\naisle = "9"\n',
-      ),
+      validateFile("stores/west-7th-tom-thumb.toml", 'slug = "west-7th-tom-thumb"\nname = "Tom Thumb"\ndomain = "grocery"\n'),
     ).not.toThrow();
     expect(() => validateFile("stores/x.toml", 'name = "X"\n')).toThrowError(/missing required field `slug`/);
     expect(() => validateFile("stores/x.toml", 'slug = "x"\n')).toThrowError(/missing required field `name`/);
     expect(() =>
-      validateFile("stores/x.toml", 'slug = "x"\nname = "X"\n[[aisles]]\nsections = ["a"]\n'),
-    ).toThrowError(/missing a `number` or `label`/);
+      validateFile("stores/x.toml", 'slug = "x"\nname = "X"\ndomain = 3\n'),
+    ).toThrowError(/`domain` must be a string/);
+    // Legacy layout keys (written before layout moved to notes) are tolerated, not validated.
     expect(() =>
-      validateFile("stores/x.toml", 'slug = "x"\nname = "X"\n[[item_locations]]\naisle = "1"\n'),
-    ).toThrowError(/item_location is missing required field `item`/);
-    expect(() =>
-      validateFile("stores/x.toml", 'slug = "x"\nname = "X"\ndoesnt_carry = "harissa"\n'),
-    ).toThrowError(/`doesnt_carry` must be an array of strings/);
+      validateFile(
+        "stores/x.toml",
+        'slug = "x"\nname = "X"\n[[aisles]]\nsections = ["a"]\n[[item_locations]]\naisle = "1"\ndoesnt_carry = []\n',
+      ),
+    ).not.toThrow();
   });
 
   it("validates cooking_log entries: date, type enum, required recipe/name", () => {

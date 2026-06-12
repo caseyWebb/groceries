@@ -4,7 +4,6 @@ import {
   serializeStore,
   toListing,
   applyStoreOperations,
-  makeNormalizer,
   listStores,
   readStore,
   storePath,
@@ -16,20 +15,12 @@ import { commitFiles } from "../src/commit.js";
 import { GitHubError, type GitHubClient, type DirEntry } from "../src/github.js";
 import { parse as parseTomlRaw } from "smol-toml";
 
-const idNorm = (s: string) => s.trim().toLowerCase();
-
 function store(over: Partial<Store> = {}): Store {
   return {
     slug: "west-7th-tom-thumb",
     name: "Tom Thumb",
     label: "West 7th",
     domain: "grocery",
-    aisles: [
-      { number: 1, sections: ["produce", "herbs"] },
-      { label: "Back wall", sections: ["meat", "seafood"] },
-    ],
-    item_locations: [{ item: "tahini", aisle: "9", detail: "bottom shelf" }],
-    doesnt_carry: ["harissa"],
     ...over,
   };
 }
@@ -104,116 +95,71 @@ describe("slugFromStoreFile / storePath", () => {
 });
 
 describe("toStore / serializeStore round-trip", () => {
-  it("round-trips identity, aisles, item_locations, and doesnt_carry", () => {
-    const reparsed = toStore(parseTomlRaw(serializeStore(store())) as Record<string, unknown>);
-    expect(reparsed).toEqual(store());
+  it("round-trips identity (slug, name, label, chain, address, domain)", () => {
+    const s = store({ chain: "Albertsons", address: "123 W 7th" });
+    const reparsed = toStore(parseTomlRaw(serializeStore(s)) as Record<string, unknown>);
+    expect(reparsed).toEqual(s);
   });
 
-  it("defaults domain to grocery and absent facets to empty", () => {
+  it("defaults domain to grocery; omits absent optional identity", () => {
     const s = toStore({ slug: "s", name: "S" });
-    expect(s.domain).toBe("grocery");
-    expect(s.aisles).toEqual([]);
-    expect(s.item_locations).toEqual([]);
-    expect(s.doesnt_carry).toEqual([]);
+    expect(s).toEqual({ slug: "s", name: "S", domain: "grocery" });
   });
 
-  it("coerces a numeric item_location aisle to a string and drops a location with no item", () => {
+  it("silently ignores legacy layout keys (aisles / item_locations / doesnt_carry)", () => {
     const s = toStore({
       slug: "s",
       name: "S",
-      item_locations: [{ item: "tahini", aisle: 9 }, { aisle: "1" }],
+      domain: "grocery",
+      aisles: [{ number: 1, sections: ["produce"] }],
+      item_locations: [{ item: "tahini", aisle: "9" }],
+      doesnt_carry: ["harissa"],
     });
-    expect(s.item_locations).toEqual([{ item: "tahini", aisle: "9" }]);
+    expect(s).toEqual({ slug: "s", name: "S", domain: "grocery" });
   });
 });
 
 describe("toListing", () => {
-  it("reports has_layout=true and carries the label when an aisle map exists", () => {
+  it("returns identity and carries the label", () => {
     expect(toListing(store())).toEqual({
       slug: "west-7th-tom-thumb",
       name: "Tom Thumb",
       label: "West 7th",
       domain: "grocery",
-      has_layout: true,
     });
   });
-  it("reports has_layout=false and omits an absent label", () => {
-    const l = toListing(store({ aisles: [], label: undefined }));
-    expect(l.has_layout).toBe(false);
+  it("omits an absent label", () => {
+    const l = toListing(store({ label: undefined }));
     expect("label" in l).toBe(false);
   });
 });
 
-describe("applyStoreOperations", () => {
-  it("lazily adds an item_location and reports it applied", () => {
-    const ops: StoreOperation[] = [{ op: "add_item_location", item: "miso", aisle: "9", detail: "by tofu" }];
-    const { store: next, applied, conflicts } = applyStoreOperations(store(), ops, idNorm);
+describe("applyStoreOperations (identity only)", () => {
+  it("set_identity edits a field and reports it applied", () => {
+    const ops: StoreOperation[] = [{ op: "set_identity", field: "domain", value: "home-improvement" }];
+    const { store: next, applied, conflicts } = applyStoreOperations(store(), ops);
     expect(conflicts).toEqual([]);
-    expect(applied).toEqual([{ op: "add_item_location", target: "miso" }]);
-    expect(next.item_locations).toContainEqual({ item: "miso", aisle: "9", detail: "by tofu" });
-  });
-
-  it("resolves a synonym to one item_location key via the normalizer (green onions → scallions)", () => {
-    const normalize = makeNormalizer({ "green onions": "scallions" });
-    const { store: next } = applyStoreOperations(
-      store({ item_locations: [] }),
-      [{ op: "add_item_location", item: "green onions", aisle: "1" }],
-      normalize,
-    );
-    expect(next.item_locations).toEqual([{ item: "scallions", aisle: "1" }]);
-  });
-
-  it("re-points an existing item_location rather than duplicating it", () => {
-    const { store: next } = applyStoreOperations(
-      store(),
-      [{ op: "add_item_location", item: "tahini", aisle: "12" }],
-      idNorm,
-    );
-    expect(next.item_locations.filter((l) => l.item === "tahini")).toEqual([{ item: "tahini", aisle: "12" }]);
-  });
-
-  it("removing an absent item_location is a conflict, not a write", () => {
-    const { applied, conflicts } = applyStoreOperations(
-      store(),
-      [{ op: "remove_item_location", item: "ghee" }],
-      idNorm,
-    );
-    expect(applied).toEqual([]);
-    expect(conflicts).toEqual([{ op: "remove_item_location", target: "ghee", reason: "no item_location with that item" }]);
-  });
-
-  it("adds and removes doesnt_carry; a second add is idempotent", () => {
-    const r1 = applyStoreOperations(store({ doesnt_carry: [] }), [{ op: "add_doesnt_carry", item: "gochujang" }], idNorm);
-    expect(r1.store.doesnt_carry).toEqual(["gochujang"]);
-    const r2 = applyStoreOperations(r1.store, [{ op: "add_doesnt_carry", item: "gochujang" }], idNorm);
-    expect(r2.applied).toEqual([]); // idempotent
-    const r3 = applyStoreOperations(r1.store, [{ op: "remove_doesnt_carry", item: "gochujang" }], idNorm);
-    expect(r3.store.doesnt_carry).toEqual([]);
-  });
-
-  it("set_identity edits a field; set_aisles replaces the whole layout", () => {
-    const ops: StoreOperation[] = [
-      { op: "set_identity", field: "domain", value: "home-improvement" },
-      { op: "set_aisles", aisles: [{ number: 5, sections: ["lumber"] }] },
-    ];
-    const { store: next } = applyStoreOperations(store(), ops, idNorm);
+    expect(applied).toEqual([{ op: "set_identity", target: "domain" }]);
     expect(next.domain).toBe("home-improvement");
-    expect(next.aisles).toEqual([{ number: 5, sections: ["lumber"] }]);
   });
 
-  it("rejects an empty name as a conflict", () => {
-    const { applied, conflicts } = applyStoreOperations(
-      store(),
-      [{ op: "set_identity", field: "name", value: "  " }],
-      idNorm,
-    );
+  it("rejects an empty name as a conflict, not a write", () => {
+    const { applied, conflicts } = applyStoreOperations(store(), [
+      { op: "set_identity", field: "name", value: "  " },
+    ]);
     expect(applied).toEqual([]);
     expect(conflicts[0].reason).toMatch(/name must not be empty/);
+  });
+
+  it("does not mutate the input store", () => {
+    const s = store();
+    applyStoreOperations(s, [{ op: "set_identity", field: "name", value: "Changed" }]);
+    expect(s.name).toBe("Tom Thumb");
   });
 });
 
 describe("listStores (gh-driven)", () => {
-  it("lists mapped stores sorted by slug, ignoring non-toml entries", async () => {
+  it("lists stores sorted by slug (identity only), ignoring non-toml entries", async () => {
     const gh = fakeGh({
       dir: [
         { name: "west-7th-tom-thumb.toml", type: "file" },
@@ -223,13 +169,13 @@ describe("listStores (gh-driven)", () => {
       ],
       files: {
         "stores/west-7th-tom-thumb.toml": serializeStore(store()),
-        "stores/central-market.toml": serializeStore(store({ slug: "central-market", name: "Central Market", aisles: [], label: undefined })),
+        "stores/central-market.toml": serializeStore(store({ slug: "central-market", name: "Central Market", label: undefined })),
       },
     });
     const { stores } = await listStores(gh);
     expect(stores.map((s) => s.slug)).toEqual(["central-market", "west-7th-tom-thumb"]);
-    expect(stores[0].has_layout).toBe(false);
-    expect(stores[1].has_layout).toBe(true);
+    expect(stores[1]).toEqual({ slug: "west-7th-tom-thumb", name: "Tom Thumb", label: "West 7th", domain: "grocery" });
+    expect("has_layout" in stores[1]).toBe(false);
   });
 
   it("returns an empty set when the stores/ tree does not exist (404)", async () => {
@@ -238,9 +184,16 @@ describe("listStores (gh-driven)", () => {
 });
 
 describe("readStore (gh-driven)", () => {
-  it("reads a store's objective content", async () => {
+  it("reads a store's identity", async () => {
     const gh = fakeGh({ files: { "stores/west-7th-tom-thumb.toml": serializeStore(store()) } });
     expect(await readStore(gh, "west-7th-tom-thumb")).toEqual(store());
+  });
+
+  it("reads identity from a legacy file still carrying layout keys (ignored, no error)", async () => {
+    const legacy =
+      '# legacy\nslug = "s"\nname = "S"\ndomain = "grocery"\n\n[[aisles]]\nnumber = 1\nsections = ["produce"]\n';
+    const gh = fakeGh({ files: { "stores/s.toml": legacy } });
+    expect(await readStore(gh, "s")).toEqual({ slug: "s", name: "S", domain: "grocery" });
   });
 
   it("yields a structured not_found for an unknown slug", async () => {
@@ -261,9 +214,9 @@ describe("store mutation round-trip (commit engine, incl. deletion)", () => {
     await commitFiles(gh, [{ path: storePath("s"), content: serializeStore(store({ slug: "s" })) }], "add");
     expect((await readStore(gh, "s")).name).toBe("Tom Thumb");
 
-    // update: apply an op and re-commit; the read reflects it.
+    // update: apply an identity op and re-commit; the read reflects it.
     const cur = await readStore(gh, "s");
-    const { store: next } = applyStoreOperations(cur, [{ op: "set_identity", field: "name", value: "TT2" }], idNorm);
+    const { store: next } = applyStoreOperations(cur, [{ op: "set_identity", field: "name", value: "TT2" }]);
     await commitFiles(gh, [{ path: storePath("s"), content: serializeStore(next) }], "update");
     expect((await readStore(gh, "s")).name).toBe("TT2");
 

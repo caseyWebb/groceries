@@ -755,10 +755,10 @@ export function buildServer(env: Env, tenant: Tenant): McpServer {
   // aggregated across the group at read time (KV tenant directory → each subtree).
   registerNoteTools(server, sharedGh, gh, tenant.id, directoryFromEnv(env));
 
-  // In-store fulfillment: the shared stores/ registry (CRUD, unattributed content)
-  // + attributed per-tenant store notes (the recipe-notes pattern, store analog).
-  // item_location keys normalize through the same aliases the matcher uses.
-  registerStoreTools(server, sharedGh, getAliases);
+  // In-store fulfillment: the shared stores/ registry (identity-only CRUD,
+  // unattributed) + attributed per-tenant store notes (the recipe-notes pattern,
+  // store analog) — layout lives in layout/location/stock-tagged store notes.
+  registerStoreTools(server, sharedGh);
   registerStoreNoteTools(server, sharedGh, gh, tenant.id, directoryFromEnv(env));
 
   // place_order — the order-time flush: resolve the list, write the Kroger cart,

@@ -6,7 +6,7 @@ Concrete schemas with example values for every data file in the repo. Keep this 
 
 The data lives in **one private data repo** with two regions (see `ARCHITECTURE.md` and the `multi-tenant-friend-group` change). Every file below lives in exactly one:
 
-- **Shared corpus (data-repo root)** — objective, single-source, read by everyone: `recipes/*.md` (objective frontmatter + body), `aliases.toml`, `substitutions.toml` (the shared default layer), `skus/kroger.toml`, `flyer_terms.toml`, `storage_guidance/` (curated put-away advice), **`stores/<slug>.toml`** (in-store-walk aisle layouts, keyed by location), **`feeds.toml`** (RSS discovery feeds), **`discoveries_inbox.toml`** (forwarded-newsletter candidates), **`discovery_sources.toml`** (inbound-email allowlist), `_indexes/`. Discovery is a shared, top-level concern — feeds and the newsletter inbox feed one group pool, judged against each caller's taste at read time.
+- **Shared corpus (data-repo root)** — objective, single-source, read by everyone: `recipes/*.md` (objective frontmatter + body), `aliases.toml`, `substitutions.toml` (the shared default layer), `skus/kroger.toml`, `flyer_terms.toml`, `storage_guidance/` (curated put-away advice), **`stores/<slug>.toml`** (in-store walk store registry — identity, keyed by location; layout lives in store notes), **`feeds.toml`** (RSS discovery feeds), **`discoveries_inbox.toml`** (forwarded-newsletter candidates), **`discovery_sources.toml`** (inbound-email allowlist), `_indexes/`. Discovery is a shared, top-level concern — feeds and the newsletter inbox feed one group pool, judged against each caller's taste at read time.
 - **Per-tenant subtree (`users/<username>/`)** — each member's own state: `pantry.toml`, `preferences.toml`, `stockup.toml`, `grocery_list.toml`, `meal_plan.toml`, `cooking_log.toml`, `ready_to_eat.toml` (personal heat-and-eat catalog), `kitchen.toml` (owned cooking equipment), `taste.md`, `diet_principles.md`, **`overlay.toml`** (subjective recipe view), **`notes/<slug>.toml`** (attributed recipe notes), **`store_notes/<slug>.toml`** (attributed store notes), an optional **`substitutions.toml`** override layer, and any personal (unshared) recipes.
 
 **Three-category recipe model (D5):** a recipe's *content* (objective frontmatter + body) is shared; its *overlay* (`rating` + `status`) is per-tenant in `overlay.toml`; its *notes* are per-tenant, attributed, append-mostly. `last_cooked` is **not stored** — it's derived per-tenant from that member's `cooking_log.toml`. Read tools merge shared content + the caller's overlay + cooking-log `last_cooked` at read time.
@@ -88,7 +88,7 @@ status = "rejected"            # Alice rejected it; other members are unaffected
 
 ## users/&lt;username&gt;/notes/&lt;slug&gt;.toml (per-tenant)
 
-A member's **attributed notes** on one recipe (shared or personal) — the spin-capture mechanism (D6). One file per recipe slug, `[[notes]]` array, append-mostly. **Author is structural** — it's the `users/<id>/` path the file lives under, never a field (unspoofable). Adding a note never modifies shared content or prior notes.
+A member's **attributed notes** on one recipe (shared or personal) — the spin-capture mechanism (D6). One file per recipe slug, `[[notes]]` array, append-mostly. **Author is structural** — it's the `users/<id>/` path the file lives under, never a field (unspoofable). Adding a note never modifies shared content; an author MAY edit or delete their **own** notes (`update_recipe_note` / `remove_recipe_note`, addressed by `created_at`, self-scoped) but never another tenant's.
 
 ```toml
 # users/alice/notes/miso-glazed-salmon.toml
@@ -108,7 +108,7 @@ private = true                             # owner-only; never surfaced to the g
 
 **Notes:**
 - `body` (required), `created_at` (required), `tags` (optional, default `[]`), `private` (optional, default `false`). A note with no `body` is dropped on read.
-- `read_recipe_notes(slug)` aggregates **non-private** notes from every member (attributed) plus the **caller's own** private notes; another member's `private` note is never surfaced. Group ratings (from each `overlay.toml`) ride the same read.
+- `read_recipe_notes(slug)` aggregates **non-private** notes from every member (attributed) plus the **caller's own** private notes; another member's `private` note is never surfaced. Group ratings (from each `overlay.toml`) ride the same read. `created_at` is the addressable key for `update_recipe_note` / `remove_recipe_note`.
 
 ## pantry.toml
 
@@ -465,10 +465,11 @@ Stand stems in ~1 inch of water, loosely bagged, **in the refrigerator** …
 
 ## stores/&lt;slug&gt;.toml (shared corpus)
 
-**Shared corpus** (data-repo root). One file per **specific store location** (not per chain) — `stores/west-7th-tom-thumb.toml`, not `stores/tom-thumb.toml` — holding the **objective** store content every member reads for the in-store walk (the second fulfillment flush, alongside the Kroger `place_order` online flush). Content is unattributed (like recipe *content*); freeform observations are attributed notes (`users/<id>/store_notes/<slug>.toml`, below). There is **no `_indexes/stores.json`** — a group maps a handful of stores, so `list_stores` reads the directory directly (the `ready_to_eat` posture). An **absent `stores/` tree is valid** (no stores mapped yet → the walk degrades to a department list from world knowledge). Stores are shared like recipes: any MCP holder MAY create or edit one with no extra gate (the `update_discovery_sources` posture).
+**Shared corpus** (data-repo root). One file per **specific store location** (not per chain) — `stores/west-7th-tom-thumb.toml`, not `stores/tom-thumb.toml` — holding the store's **identity** every member reads for the in-store walk (the second fulfillment flush, alongside the Kroger `place_order` online flush). The registry is **identity only** — store **layout** (aisle order, where-it-hides hints, not-carried entries) lives in attributed store notes (`users/<id>/store_notes/<slug>.toml`, below), not here. Identity is unattributed (like recipe *content*). There is **no `_indexes/stores.json`** — a group registers a handful of stores, so `list_stores` reads the directory directly (the `ready_to_eat` posture). An **absent `stores/` tree is valid** (no stores registered yet → the walk degrades to a department list from world knowledge). Stores are shared like recipes: any MCP holder MAY register or edit one with no extra gate (the `update_discovery_sources` posture).
 
 ```toml
-# stores/west-7th-tom-thumb.toml — objective store content, shared.
+# stores/west-7th-tom-thumb.toml — objective store IDENTITY, shared.
+# Layout lives in attributed store notes (store_notes/<slug>.toml, tags layout/location/stock).
 
 slug = "west-7th-tom-thumb"      # required, kebab-case LOCATION id (matches the filename)
 name = "Tom Thumb"               # required, the chain/store name
@@ -476,53 +477,48 @@ label = "West 7th"               # optional human handle for this location
 chain = "tom-thumb"              # optional
 address = "1600 W 7th St"        # optional
 domain = "grocery"               # free string; default "grocery" (grocery | home-improvement | garden | pharmacy | …)
-
-# Ordered aisle layout in the store's OWN sign vocabulary. Order = the walk path.
-# Each aisle has a `number` OR a `label` (or both) plus a free-string `sections` array.
-[[aisles]]
-number = 1
-sections = ["produce", "herbs", "packaged salads"]
-
-[[aisles]]
-number = 9
-label = "9 — International"
-sections = ["mexican", "asian", "tahini & specialty"]
-
-[[aisles]]
-label = "Back wall"
-sections = ["meat", "seafood", "fish counter"]
-
-# Sparse, grown-from-the-walk: only the NON-OBVIOUS placements. Never map where milk is.
-[[item_locations]]
-item = "tahini"                  # a NORMALIZED ingredient name (same matcher as pantry verify)
-aisle = "9"                      # the aisle `number`/`label` it lives in
-detail = "bottom shelf, by the specialty oils"   # optional pinpoint
-
-# Sparse negative set — surprising absences only. A hint, never a gate.
-doesnt_carry = ["harissa", "gochujang"]
 ```
 
 **Notes:**
-- `slug` + `name` are required; everything else is optional. `slug` SHOULD match the filename (the location id).
-- `aisles` is an **ordered** list (the order is the walk path). Each entry needs a `number` **or** a `label`, plus a `sections` string array in the store's **own** sign vocabulary (not a global enum — every store's signs differ). Absent `aisles` ⇒ the walk degrades to a department-grouped list (rung 0).
-- `item_locations` and `doesnt_carry` are **sparse by design** — the surprising stuff only, grown lazily from the walk's "can't find it → oh, aisle 9" moment (the agent *offers* to save; never auto-writes). Each `item_location` carries a normalized `item` + an `aisle` + an optional `detail`. `item` keys use the **same `normalizeIngredient` + aliases** the verify matcher applies, so a grocery-list line for "green onions" or "scallions" resolves to one hint. `doesnt_carry` is a flat string array — a hint that MAY be cleared when the item is later found.
-- `domain` (free string, default `grocery`) is the store's kind; the walk filters the grocery list to items of the same `domain`. A wrong tag only mis-files an item, so it's open-vocabulary, not a hard enum.
-- Validated structurally at build time (`scripts/build-indexes.mjs` → `validateStore`) and by the Worker's write-time subset (`src/validate.ts`). CRUD via `list_stores` / `read_store` / `add_store` / `update_store` / `remove_store` (see `docs/TOOLS.md`).
-- **Follow-ons, explicitly out of scope for v1** (seeds captured now, surface deferred): cross-store routing (a `doesnt_carry` item → another store that carries it; a `known_for` cheapest-X facet → suggest a split trip — `doesnt_carry` is its seed); folding the Kroger location config into `stores/` to unify `[stores]`; chain-level data sharing; and the non-grocery skill surface (the `domain` facet is built so a Lowe's/Target run generalizes for free, but the agent copy stays grocery-shaped). Per-item "picked" persistence for resilient long voice walks is also deferred (v1 batches the received transition at completion, like `cook`).
+- `slug` + `name` are required; everything else is optional. `slug` SHOULD match the filename (the location id). The registry carries **no layout** — `aisles` / `item_locations` / `doesnt_carry` are gone; they're store notes now.
+- **Layout is notes.** Aisle order, where-it-hides placements, and not-carried entries are `add_store_note` / `read_store_notes` with `layout` / `location` / `stock` tags (see the `store_notes/` schema below). One surface for everything we know about a store. The walk infers aisle order from the `layout` notes (lead each with the aisle number); item→aisle placement is agent judgment over the store's own sign vocabulary (open-vocab, no manifest — the storage-guidance posture).
+- `domain` (free string, default `grocery`) is the store's kind; the walk filters the grocery list to items of the same `domain`. A wrong tag only mis-files an item, so it's open-vocabulary, not a hard enum. For a store the user names that isn't registered, the agent classifies its domain from world knowledge (Lowe's → `home-improvement`).
+- **Legacy tolerance:** a `stores/<slug>.toml` written before this change may still carry `aisles` / `item_locations` / `doesnt_carry` keys — the parser and both validators **silently ignore** them (read identity, never error). They are not migrated.
+- Validated structurally at build time (`scripts/build-indexes.mjs` → `validateStore`) and by the Worker's write-time subset (`src/validate.ts`). CRUD via `list_stores` / `read_store` / `add_store` / `update_store` (identity ops only) / `remove_store` (see `docs/TOOLS.md`). `list_stores` returns identity only — whether a store has a usable map is a `read_store_notes` concern.
+- **Follow-ons, explicitly out of scope for v1** (seeds captured now, surface deferred): cross-store routing (a `stock` note → another store that carries it; a cheapest-X facet → suggest a split trip); folding the Kroger location config into `stores/` to unify `[stores]`; chain-level data sharing; and the non-grocery skill surface (the `domain` facet is built so a Lowe's/Target run generalizes for free, but the agent copy stays grocery-shaped). Per-item "picked" persistence for resilient long voice walks is also deferred (v1 batches the received transition at completion, like `cook`).
 
 ## users/&lt;username&gt;/store_notes/&lt;slug&gt;.toml (per-tenant)
 
-A member's **attributed notes** on one store — the store analog of recipe notes (D6), verbatim. One file per store slug, `[[notes]]` array, append-mostly. **Author is structural** — the `users/<id>/` path the file lives under, never a field. Carries both objective ("fish counter closes at 6 PM") and personal ("they have the Kerrygold I like") observations; the agent never folds a note into the shared store content (notes stay attributed). Shared-by-default, with an optional `private` flag.
+A member's **attributed notes** on one store — the store analog of recipe notes (D6), and the **single home for everything we know about a store**: both freeform observations ("fish counter closes at 6 PM", "they have the Kerrygold I like") AND the store's **layout**, captured by tag convention. One file per store slug, `[[notes]]` array. **Author is structural** — the `users/<id>/` path the file lives under, never a field. Shared-by-default, with an optional `private` flag.
 
 ```toml
 # users/alice/store_notes/west-7th-tom-thumb.toml
 # Store notes authored by this tenant (one file per store slug).
-# Append-mostly; author is the users/<id>/ path, not a field. private → owner-only.
+# Author is the users/<id>/ path, not a field. private → owner-only.
 
+# Layout — lead the body with the aisle number; note order by number is the walk path.
 [[notes]]
-created_at = "2026-06-11T18:30:00.000Z"   # ISO timestamp (required)
+created_at = "2026-06-11T18:10:00.000Z"
+body = "Aisle 9: mexican, asian, tahini & specialty oils"
+tags = ["layout"]
+
+# Where a non-obvious item hides.
+[[notes]]
+created_at = "2026-06-11T18:12:00.000Z"
+body = "Tahini: aisle 9, bottom shelf by the specialty oils"
+tags = ["location"]
+
+# A not-carried item (a hint, never a gate; supersede with a newer note if it changes).
+[[notes]]
+created_at = "2026-06-11T18:14:00.000Z"
+body = "Doesn't carry harissa"
+tags = ["stock"]
+
+# Freeform observation.
+[[notes]]
+created_at = "2026-06-11T18:30:00.000Z"
 body = "Fish counter closes at 6 PM — get seafood early."
-tags = ["hours"]                           # optional
+tags = ["hours"]
 
 [[notes]]
 created_at = "2026-06-11T19:05:00.000Z"
@@ -531,8 +527,10 @@ private = true                             # owner-only; never surfaced to the g
 ```
 
 **Notes:**
-- Same shape as recipe notes: `body` (required), `created_at` (required), `tags` (optional, default `[]`), `private` (optional, default `false`). A note with no `body` is dropped on read.
-- `read_store_notes(slug)` aggregates **non-private** notes from every member (attributed) plus the **caller's own** private notes; another member's `private` note is never surfaced. `add_store_note(slug, body, private?)` appends to the caller's subtree.
+- Same shape as recipe notes: `body` (required), `created_at` (required, ms-precision ISO — the addressable key for edit/delete), `tags` (optional, default `[]`), `private` (optional, default `false`). A note with no `body` is dropped on read.
+- **Tag convention for layout:** `layout` (an aisle + its sections, body led by the aisle number), `location` (where a non-obvious item hides), `stock` (a not-carried entry). Untagged / other-tagged notes are freeform. The agent reads `layout` notes to order the walk; a `location` note wins over inference for that item.
+- **Author-mutable.** `update_store_note(slug, created_at, …)` / `remove_store_note(slug, created_at)` edit or delete the caller's **own** notes (self-scoped by structural authorship — never another tenant's). This is the clean-correction path after a remodel. Across tenants there is no delete-the-other's-note — a reader prefers the most recent by `created_at` when two conflict.
+- `read_store_notes(slug)` aggregates **non-private** notes from every member (attributed) plus the **caller's own** private notes; another member's `private` note is never surfaced. `add_store_note(slug, body, tags?, private?)` appends to the caller's subtree.
 
 ## users/<username>/ready_to_eat.toml
 

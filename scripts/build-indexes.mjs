@@ -291,10 +291,10 @@ export function validateKitchenInventory(parsed, rel) {
 
 // Stores are shared (stores/<slug>.toml), keyed by location — no aggregate index.
 // Structural-validate one already-parsed store; returns an array of errors. The
-// objective content: `slug`+`name` required; `domain` a string when present; the
-// ordered `[[aisles]]` each carrying a `number` OR `label` plus a `sections`
-// string array; `[[item_locations]]` each an `item`+`aisle`; `doesnt_carry` a
-// string array. An absent stores/ tree never reaches here (the walk skips it).
+// registry holds IDENTITY only: `slug`+`name` required; `domain` a string when
+// present. Layout lives in attributed store notes (store_notes/<slug>.toml), not
+// here — legacy `aisles`/`item_locations`/`doesnt_carry` keys are tolerated and
+// ignored. An absent stores/ tree never reaches here (the walk skips it).
 export function validateStore(parsed, rel) {
   const errors = [];
   if (typeof parsed.slug !== 'string' || !parsed.slug) {
@@ -305,42 +305,6 @@ export function validateStore(parsed, rel) {
   }
   if (parsed.domain != null && typeof parsed.domain !== 'string') {
     errors.push(`${rel}: \`domain\` must be a string (got ${JSON.stringify(parsed.domain)})`);
-  }
-  if (parsed.aisles != null) {
-    if (!Array.isArray(parsed.aisles)) {
-      errors.push(`${rel}: \`aisles\` must be an ordered list (got ${JSON.stringify(parsed.aisles)})`);
-    } else {
-      for (const a of parsed.aisles) {
-        if (!a || typeof a !== 'object') {
-          errors.push(`${rel}: each aisle must be a table with a \`number\` or \`label\` and \`sections\``);
-          continue;
-        }
-        if (a.number == null && (typeof a.label !== 'string' || !a.label)) {
-          errors.push(`${rel}: aisle is missing a \`number\` or \`label\``);
-        }
-        if (a.sections != null && (!Array.isArray(a.sections) || a.sections.some((s) => typeof s !== 'string'))) {
-          errors.push(`${rel}: aisle \`sections\` must be an array of strings (got ${JSON.stringify(a.sections)})`);
-        }
-      }
-    }
-  }
-  if (parsed.item_locations != null) {
-    if (!Array.isArray(parsed.item_locations)) {
-      errors.push(`${rel}: \`item_locations\` must be a list (got ${JSON.stringify(parsed.item_locations)})`);
-    } else {
-      for (const loc of parsed.item_locations) {
-        if (!loc || typeof loc !== 'object' || typeof loc.item !== 'string' || !loc.item) {
-          errors.push(`${rel}: item_location is missing required \`item\``);
-        } else if (loc.aisle == null || (typeof loc.aisle !== 'string' && typeof loc.aisle !== 'number')) {
-          errors.push(`${rel}: item_location for ${JSON.stringify(loc.item)} is missing a valid \`aisle\``);
-        }
-      }
-    }
-  }
-  if (parsed.doesnt_carry != null) {
-    if (!Array.isArray(parsed.doesnt_carry) || parsed.doesnt_carry.some((s) => typeof s !== 'string')) {
-      errors.push(`${rel}: \`doesnt_carry\` must be an array of strings (got ${JSON.stringify(parsed.doesnt_carry)})`);
-    }
   }
   return errors;
 }

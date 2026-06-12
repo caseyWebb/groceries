@@ -263,7 +263,8 @@ test('AGENT_INSTRUCTIONS.md: workflows with expected needs + library tiers', asy
     'grocery-sale-check',
     'cooking-retrospective',
     'place-grocery-order',
-    'store-walk',
+    'shopping-list',
+    'map-grocery-store',
     'configure-grocery-profile',
     'report-grocery-agent-bug',
   ]);
@@ -272,7 +273,8 @@ test('AGENT_INSTRUCTIONS.md: workflows with expected needs + library tiers', asy
   assert.deepEqual(needs['grocery-sale-check'], []); // light flow: core only
   assert.deepEqual(needs['cook'], []);
   assert.deepEqual(needs['place-grocery-order'], ['cart']);
-  assert.deepEqual(needs['store-walk'], ['cart']);
+  assert.deepEqual(needs['shopping-list'], ['cart']);
+  assert.deepEqual(needs['map-grocery-store'], ['cart']);
 
   // Library tiers emitted; workflows reference, don't inline.
   const files = buildPluginFiles(parsed, { mcpUrl: 'https://x' });

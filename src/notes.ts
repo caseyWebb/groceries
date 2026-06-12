@@ -86,6 +86,47 @@ export function appendNote(existing: Note[], note: Note): Note[] {
   return [...existing, note];
 }
 
+/** Fields an author may patch on their own note (only provided fields change). */
+export interface NotePatch {
+  body?: string;
+  tags?: string[];
+  private?: boolean;
+}
+
+/**
+ * Remove the note addressed by `created_at`. `found: false` ⇒ no note matched
+ * (a no-op — the caller's file is returned unchanged). Used by remove_*_note;
+ * since the file read is the caller's OWN subtree, this can only ever drop the
+ * caller's own note (structural self-scoping), never another tenant's.
+ */
+export function removeNote(notes: Note[], createdAt: string): { notes: Note[]; found: boolean } {
+  const idx = notes.findIndex((n) => n.created_at === createdAt);
+  if (idx === -1) return { notes, found: false };
+  return { notes: [...notes.slice(0, idx), ...notes.slice(idx + 1)], found: true };
+}
+
+/**
+ * Patch the note addressed by `created_at`, changing only the fields present in
+ * `patch` (`created_at` is the immutable key). `found: false` ⇒ no match (no-op).
+ * Self-scoped like removeNote: operates on the caller's own note file.
+ */
+export function updateNote(
+  notes: Note[],
+  createdAt: string,
+  patch: NotePatch,
+): { notes: Note[]; found: boolean } {
+  const idx = notes.findIndex((n) => n.created_at === createdAt);
+  if (idx === -1) return { notes, found: false };
+  const cur = notes[idx];
+  const next: Note = {
+    created_at: cur.created_at,
+    body: patch.body ?? cur.body,
+    tags: patch.tags ?? cur.tags,
+    private: patch.private ?? cur.private,
+  };
+  return { notes: [...notes.slice(0, idx), next, ...notes.slice(idx + 1)], found: true };
+}
+
 /** Serialize notes back to a `[[notes]]` file, preserving a documentation header. */
 export function serializeNotes(notes: Note[], header: string = RECIPE_NOTES_HEADER): string {
   const data = {

@@ -18,6 +18,8 @@ import { parseOverlay } from "./overlay.js";
 import {
   parseNotes,
   appendNote,
+  removeNote,
+  updateNote,
   serializeNotes,
   serializeStoreNotes,
   notesPath,
@@ -25,6 +27,7 @@ import {
   aggregateGroupSignal,
   aggregateNotes,
   type Note,
+  type NotePatch,
   type TenantSignal,
 } from "./notes.js";
 
@@ -109,6 +112,71 @@ export function registerNoteTools(
         return { slug, ...aggregateGroupSignal(tenantId, perTenant) };
       }),
   );
+
+  server.registerTool(
+    "update_recipe_note",
+    {
+      description:
+        "Edit one of YOUR OWN recipe notes, addressed by its created_at (from add_recipe_note / read_recipe_notes). Only the fields you pass change (body / tags / private); created_at is the immutable key. Self-scoped: it reads your own subtree, so it can only ever touch a note you authored — a created_at that matches only someone else's note returns not_found. Use it to fix a typo or refine an observation instead of stacking a correcting note.",
+      inputSchema: {
+        slug: z.string(),
+        created_at: z.string(),
+        body: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        private: z.boolean().optional(),
+      },
+    },
+    ({ slug, created_at, body, tags, private: isPrivate }) =>
+      runTool(async () => {
+        if (!SLUG_RE.test(slug)) {
+          throw new ToolError("validation_failed", `Invalid recipe slug: ${slug}`, { slug });
+        }
+        if (body !== undefined && !body.trim()) {
+          throw new ToolError("validation_failed", "note body must not be empty", { slug });
+        }
+        const path = notesPath(slug);
+        const patch: NotePatch = {};
+        if (body !== undefined) patch.body = body;
+        if (tags !== undefined) patch.tags = tags;
+        if (isPrivate !== undefined) patch.private = isPrivate;
+        const { notes, found } = updateNote(parseNotes(await readOptional(personalGh, path)), created_at, patch);
+        if (!found) {
+          throw new ToolError("not_found", `No note of yours on ${slug} with that created_at`, {
+            slug,
+            created_at,
+          });
+        }
+        const file: TreeFile = { path, content: serializeNotes(notes) };
+        const { commit_sha } = await commitFiles(personalGh, [file], `edit note on ${slug}`);
+        return { slug, author: tenantId, created_at, commit_sha };
+      }),
+  );
+
+  server.registerTool(
+    "remove_recipe_note",
+    {
+      description:
+        "Delete one of YOUR OWN recipe notes, addressed by its created_at. Self-scoped to your subtree, so you can only ever remove a note you authored; a created_at that matches only someone else's note returns not_found. Shared recipe content and other tenants' notes are untouched.",
+      inputSchema: { slug: z.string(), created_at: z.string() },
+    },
+    ({ slug, created_at }) =>
+      runTool(async () => {
+        if (!SLUG_RE.test(slug)) {
+          throw new ToolError("validation_failed", `Invalid recipe slug: ${slug}`, { slug });
+        }
+        const path = notesPath(slug);
+        const { notes, found } = removeNote(parseNotes(await readOptional(personalGh, path)), created_at);
+        if (!found) {
+          throw new ToolError("not_found", `No note of yours on ${slug} with that created_at`, {
+            slug,
+            created_at,
+          });
+        }
+        const file: TreeFile = { path, content: serializeNotes(notes) };
+        const { commit_sha } = await commitFiles(personalGh, [file], `remove note on ${slug}`);
+        return { slug, removed: true, created_at, commit_sha };
+      }),
+  );
 }
 
 /**
@@ -129,7 +197,7 @@ export function registerStoreNoteTools(
     "add_store_note",
     {
       description:
-        "Append an attributed note to a store (the store analog of add_recipe_note). Use for both objective observations ('fish counter closes at 6 PM', 'parking is brutal after 5') and personal ones ('they stock the Kerrygold I like'). Append-mostly; author is structural (your subtree), not a field. Set private=true to keep a note to yourself; default is shared with the group. Optional tags. Objective STRUCTURED facts (an item's aisle, a not-carried item) belong in the shared store via update_store — a note is for freeform observations.",
+        "Append an attributed note to a store — the single home for everything we know about it. Freeform observations ('fish counter closes at 6 PM', 'parking is brutal after 5', 'they stock the Kerrygold I like') AND the store's layout, captured by tag convention: tags:['layout'] for an aisle and its sections — LEAD the body with the aisle number ('Aisle 7: baking, spices, oils'); the order of layout notes by aisle number IS the walk path. tags:['location'] for where a non-obvious item hides ('Harissa: aisle 9, international foods, not condiments'). tags:['stock'] for a not-carried item (\"Doesn't carry fresh dill\"). Append-mostly; author is structural (your subtree), not a field. Set private=true to keep a note to yourself; default is shared. Correct your own notes with update_store_note / remove_store_note (addressed by created_at); across tenants, a later note supersedes an earlier one at read by recency.",
       inputSchema: {
         slug: z.string(),
         body: z.string(),
@@ -181,6 +249,71 @@ export function registerStoreNoteTools(
           perTenant.push({ author: id, notes });
         }
         return { slug, notes: aggregateNotes(tenantId, perTenant) };
+      }),
+  );
+
+  server.registerTool(
+    "update_store_note",
+    {
+      description:
+        "Edit one of YOUR OWN store notes, addressed by its created_at (from add_store_note / read_store_notes). Only the fields you pass change (body / tags / private); created_at is the immutable key. Self-scoped: it reads your own subtree, so it can only ever touch a note you authored — a created_at that matches only someone else's note returns not_found. This is the clean-correction path for a stale layout note after a remodel (edit it instead of stacking a contradicting note).",
+      inputSchema: {
+        slug: z.string(),
+        created_at: z.string(),
+        body: z.string().optional(),
+        tags: z.array(z.string()).optional(),
+        private: z.boolean().optional(),
+      },
+    },
+    ({ slug, created_at, body, tags, private: isPrivate }) =>
+      runTool(async () => {
+        if (!SLUG_RE.test(slug)) {
+          throw new ToolError("validation_failed", `Invalid store slug: ${slug}`, { slug });
+        }
+        if (body !== undefined && !body.trim()) {
+          throw new ToolError("validation_failed", "note body must not be empty", { slug });
+        }
+        const path = storeNotesPath(slug);
+        const patch: NotePatch = {};
+        if (body !== undefined) patch.body = body;
+        if (tags !== undefined) patch.tags = tags;
+        if (isPrivate !== undefined) patch.private = isPrivate;
+        const { notes, found } = updateNote(parseNotes(await readOptional(personalGh, path)), created_at, patch);
+        if (!found) {
+          throw new ToolError("not_found", `No note of yours on ${slug} with that created_at`, {
+            slug,
+            created_at,
+          });
+        }
+        const file: TreeFile = { path, content: serializeStoreNotes(notes) };
+        const { commit_sha } = await commitFiles(personalGh, [file], `edit store note on ${slug}`);
+        return { slug, author: tenantId, created_at, commit_sha };
+      }),
+  );
+
+  server.registerTool(
+    "remove_store_note",
+    {
+      description:
+        "Delete one of YOUR OWN store notes, addressed by its created_at — e.g. drop a pre-remodel layout note. Self-scoped to your subtree, so you can only ever remove a note you authored; a created_at that matches only someone else's note returns not_found. Other tenants' notes are untouched.",
+      inputSchema: { slug: z.string(), created_at: z.string() },
+    },
+    ({ slug, created_at }) =>
+      runTool(async () => {
+        if (!SLUG_RE.test(slug)) {
+          throw new ToolError("validation_failed", `Invalid store slug: ${slug}`, { slug });
+        }
+        const path = storeNotesPath(slug);
+        const { notes, found } = removeNote(parseNotes(await readOptional(personalGh, path)), created_at);
+        if (!found) {
+          throw new ToolError("not_found", `No note of yours on ${slug} with that created_at`, {
+            slug,
+            created_at,
+          });
+        }
+        const file: TreeFile = { path, content: serializeStoreNotes(notes) };
+        const { commit_sha } = await commitFiles(personalGh, [file], `remove store note on ${slug}`);
+        return { slug, removed: true, created_at, commit_sha };
       }),
   );
 }

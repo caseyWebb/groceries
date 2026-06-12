@@ -9,7 +9,7 @@ user-invocable: false
 Capture buy-intent onto the **grocery list** continuously, as it comes up; **flush it once**, at order time. The flush has **two forms**, picked by my fulfillment mode (`preferences.toml [stores].primary`) — **don't assume Kroger**:
 
 - **Kroger online** (`primary: kroger`) — flush to the Kroger cart with `place_order` (the place-grocery-order flow).
-- **In-store walk** (`primary` is a store slug from `stores/`) — turn the list into an aisle-ordered shopping list for that store and walk it (the store-walk flow). Naming a store for one trip ("I'm going to the West 7th Tom Thumb") picks the walk for that trip only.
+- **In-store walk** (`primary` is a store slug from `stores/`) — turn the list into a shopping list grouped for that store and walk it (the shopping-list flow). Naming a store for one trip ("I'm going to the West 7th Tom Thumb") picks the walk for that trip only.
 
 **Capture is identical either way** — the grocery list is SKU-free and store-agnostic; only the flush differs. Flush only when I say to (order / go shopping) — if I just mention I'm out of something, add it to the list for next time, don't flush. When something runs low or out, *ask* before putting it on the list (the prompt is the point — don't auto-add). Household / non-food items belong on the list too.
 

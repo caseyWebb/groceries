@@ -206,10 +206,11 @@ export function validateFile(path: string, content: string): void {
     return;
   }
 
-  // Shared store registry (stores/<slug>.toml): objective content. `slug`+`name`
-  // required; `domain` a string; ordered `[[aisles]]` each with a number|label +
-  // string `sections`; `[[item_locations]]` each item+aisle; `doesnt_carry` a
-  // string array. The build reimplements the same subset (validateStore there).
+  // Shared store registry (stores/<slug>.toml): IDENTITY only. `slug`+`name`
+  // required; `domain` a string when present. Layout lives in attributed store
+  // notes (store_notes/<slug>.toml), not here — legacy `aisles`/`item_locations`/
+  // `doesnt_carry` keys are tolerated and ignored. The build reimplements the same
+  // subset (validateStore there).
   if (path.startsWith("stores/") && path.endsWith(".toml")) {
     const parsed = parseTomlOrFail(path, content);
     if (typeof parsed.slug !== "string" || parsed.slug.length === 0) {
@@ -220,38 +221,6 @@ export function validateFile(path: string, content: string): void {
     }
     if (parsed.domain != null && typeof parsed.domain !== "string") {
       fail(path, `\`domain\` must be a string (got ${JSON.stringify(parsed.domain)})`);
-    }
-    if (parsed.aisles != null) {
-      if (!Array.isArray(parsed.aisles)) {
-        fail(path, `\`aisles\` must be an ordered list (got ${JSON.stringify(parsed.aisles)})`);
-      }
-      for (const a of parsed.aisles as Record<string, unknown>[]) {
-        if (!a || typeof a !== "object") fail(path, "each aisle must be a table");
-        if (a.number == null && (typeof a.label !== "string" || a.label.length === 0)) {
-          fail(path, "aisle is missing a `number` or `label`");
-        }
-        if (a.sections != null && (!Array.isArray(a.sections) || a.sections.some((s) => typeof s !== "string"))) {
-          fail(path, `aisle \`sections\` must be an array of strings (got ${JSON.stringify(a.sections)})`);
-        }
-      }
-    }
-    if (parsed.item_locations != null) {
-      if (!Array.isArray(parsed.item_locations)) {
-        fail(path, `\`item_locations\` must be a list (got ${JSON.stringify(parsed.item_locations)})`);
-      }
-      for (const loc of parsed.item_locations as Record<string, unknown>[]) {
-        if (!loc || typeof loc.item !== "string" || loc.item.length === 0) {
-          fail(path, "item_location is missing required field `item`");
-        }
-        if (loc.aisle == null || (typeof loc.aisle !== "string" && typeof loc.aisle !== "number")) {
-          fail(path, `item_location for ${JSON.stringify(loc.item)} is missing a valid \`aisle\``);
-        }
-      }
-    }
-    if (parsed.doesnt_carry != null) {
-      if (!Array.isArray(parsed.doesnt_carry) || parsed.doesnt_carry.some((s) => typeof s !== "string")) {
-        fail(path, `\`doesnt_carry\` must be an array of strings (got ${JSON.stringify(parsed.doesnt_carry)})`);
-      }
     }
     return;
   }
